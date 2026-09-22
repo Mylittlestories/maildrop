@@ -44,8 +44,12 @@ link, the length, and a pre-written email you can copy or hand to your mail clie
 
 **Receive.** Open the link. The part map comes out of the hash, the parts download
 in parallel, each one is hashed and compared with the 16-hex-character fingerprint
-the sender recorded, and the file is written to disk as it arrives (a 12 GB
-transfer never has to fit in RAM). Then *Download & save file*.
+the sender recorded, and the file is written to disk as it arrives. In Chromium
+over HTTPS that is a real stream: the page asks for a file with *Save as*, writes
+each part as it lands and never holds more than one in memory, so a 20 GB receive
+works on a small laptop. Firefox and Safari have no `showSaveFilePicker`, so there
+the parts accumulate in a `Blob` — fine up to a few gigabytes, and the page says
+which mode it is in via the badges at the top. Then *Download & save file*.
 
 **Verify.** Every part is checked. A truncated, replaced or expired part is
 refused with a message that says which one and why — you never get a silently
@@ -128,8 +132,12 @@ file**. If the link might travel somewhere you don't control, tick the box.
 ## Try it now
 
 ```bash
-python3 -m http.server 8080     # or: npx serve .   or just double-click index.html
+npm run serve        # node tools/serve.mjs — no dependencies, nothing to install
+# → http://127.0.0.1:8080/
 ```
+
+Double-clicking `index.html` works for the demo too; only the cross-origin parts
+(a real provider, the `fetch` on the receive side) want an `http://` URL.
 
 Then choose **In-page test** as the provider and press *Demo* — a 4 MB sample file
 goes through the real pipeline (hash, split, upload, link, receive, verify) with
@@ -142,8 +150,9 @@ zero network.
 
 ```bash
 npm install            # jsdom only, and only for the browser test
-npm test               # unit + integration + browser + page  (67 assertions groups)
-node tools/live-check.mjs 6     # optional: pokes the real public hosts
+npm test               # unit + integration + browser + page, 71 tests
+npm run test:browser   # any one suite on its own
+npm run live           # node tools/live-check.mjs — pokes the real public hosts
 ```
 
 * `tests/unit.test.js` — manifest round trips, packing, crypto, email recovery.
@@ -152,7 +161,9 @@ node tools/live-check.mjs 6     # optional: pokes the real public hosts
   like a user: pick → send → link → receive → byte-identical file, plus the
   password, split, corrupted-part and bring-your-own-link paths.
 * `tests/page.test.js` — the HTML itself: ids the scripts rely on, no stray
-  third-party requests, script order.
+  third-party requests, script order, and every `<script src>` and doc link
+  fetched from a real static server (`tools/serve.mjs`) to prove the deployed
+  shape has nothing missing.
 
 The mock host is deliberately as strict about multipart framing as a real PHP
 endpoint, because a missing CRLF before the closing boundary once produced

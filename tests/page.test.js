@@ -97,5 +97,30 @@ function idRefs(file) {
     eq(/'\?'/.test(man), false, 'no query-string embedding');
   });
 
+  await test('what a static host must serve is really there: scripts, docs, and no dotfiles', async () => {
+    const { startServe } = require('./harness.js');
+    const srv = await startServe(ROOT);
+    try {
+      const page = await fetch(srv.base);
+      eq(page.status, 200, 'the page itself');
+      ok(/^text\/html/.test(page.headers.get('content-type') || ''), 'served as HTML');
+      const body = await page.text();
+      const scripts = [...body.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
+      eq(scripts.length, 10, 'ten local scripts referenced');
+      for (const src of scripts) {
+        const r = await fetch(srv.base + src);
+        eq(r.status, 200, src + ' resolves relative to the page');
+        ok(/javascript/.test(r.headers.get('content-type') || ''), src + ' is served as JavaScript');
+      }
+      const links = [...html.matchAll(/href="((?:docs|README)[^"]*)"/g)].map((m) => m[1]);
+      ok(links.length >= 4, 'the page links its docs: ' + links.join(' '));
+      for (const href of links) eq((await fetch(srv.base + href)).status, 200, 'doc link is real: ' + href);
+      eq((await fetch(srv.base + '.git/config')).status, 404, 'no dotfiles out of a preview server');
+      eq((await fetch(srv.base + 'nowhere.js')).status, 404, 'a 404 says what is missing');
+    } finally {
+      srv.kill();
+    }
+  });
+
   report('page');
 })();

@@ -80,21 +80,21 @@ function report(label) {
 }
 
 // ---- mock host lifecycle: PORT=0, learn the real port from stdout ----------
-function startMock(root) {
+function startTool(root, script, marker) {
   const { spawn } = require('child_process');
   const http = require('http');
-  const srv = spawn(process.execPath, [path.join(root, 'tools', 'mock-host.mjs')], {
+  const srv = spawn(process.execPath, [path.join(root, 'tools', script)], {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PORT: '0' }
   });
   let out = '';
   const portReady = new Promise((res, rej) => {
-    const to = setTimeout(() => rej(new Error('mock host did not report a port')), 8000);
+    const to = setTimeout(() => rej(new Error(script + ' did not report a port')), 8000);
     srv.stdout.on('data', (d) => {
       out += d.toString();
-      const m = /MOCKPORT=(\d+)/.exec(out);
+      const m = new RegExp(marker + '=(\\d+)').exec(out);
       if (m) { clearTimeout(to); res(Number(m[1])); }
     });
-    srv.on('exit', (c) => rej(new Error('mock host exited early: ' + c + ' ' + out)));
+    srv.on('exit', (c) => rej(new Error(script + ' exited early: ' + c + ' ' + out)));
   });
   return portReady.then(async (port) => {
     const base = 'http://127.0.0.1:' + port + '/';
@@ -109,4 +109,7 @@ function startMock(root) {
   });
 }
 
-module.exports = { makeSandbox, loadLib, loadAll: (c) => loadLib(c, true), startMock, test, eq, ok, near, throwsAsync, section, report, FILES, LIB, path, fs };
+function startMock(root) { return startTool(root, 'mock-host.mjs', 'MOCKPORT'); }
+function startServe(root) { return startTool(root, 'serve.mjs', 'SERVEPORT'); }
+
+module.exports = { makeSandbox, loadLib, loadAll: (c) => loadLib(c, true), startMock, startServe, test, eq, ok, near, throwsAsync, section, report, FILES, LIB, path, fs };

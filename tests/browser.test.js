@@ -334,6 +334,21 @@ let mock;
     dom.window.close();
   });
 
+  await test('the preview button runs the receive flow in this tab for test mode', async () => {
+    const { dom, w, doc } = await bootPage();
+    const buf = crypto.randomBytes(2 * 1024 * 1024);
+    w.MD.app.state.files = [new File([buf], 'preview.bin', { type: 'application/octet-stream' })];
+    w.MD.app.state.cfg.backend = 'local';
+    w.UI.renderFiles();
+    await w.MD.app.runSend();
+    doc.getElementById('btnOpenLink').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    eq(doc.getElementById('panel-receive').className, 'on', 'jumped to the receive tab');
+    await waitUntil(() => w.MD.app.state.receive.resultBlob, 20000, 'in-tab round trip');
+    eq(Buffer.from(await w.MD.app.state.receive.resultBlob.arrayBuffer()).toString('hex'), buf.toString('hex'),
+       'the preview shows the recipient’s exact bytes');
+    dom.window.close();
+  });
+
   await test('the demo button runs the offline pipeline end to end', async () => {
     const { dom, w, doc } = await bootPage();
     doc.getElementById('btnDemo').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));

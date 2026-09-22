@@ -15,12 +15,15 @@ const TYPES = {
   '.md': 'text/plain; charset=utf-8', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8'
 };
 
-createServer(async (req, res) => {
+const server = createServer(async (req, res) => {
   try {
     let p = decodeURIComponent((req.url || '/').split('?')[0].split('#')[0]);
     if (p.endsWith('/')) p += 'index.html';
     const file = normalize(join(ROOT, p));
     if (!file.startsWith(ROOT)) { res.writeHead(403).end('nope'); return; }
+    // never hand out .git/.env from a preview server, even though a static host
+    // would not publish them either
+    if (/(^|\/)\.[^/]*(\/|$)/.test(p)) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('404 hidden'); return; }
     let s = null;
     try { s = await stat(file); } catch (e) { /* fall through to 404 */ }
     if (!s || !s.isFile()) {
@@ -41,5 +44,8 @@ createServer(async (req, res) => {
     res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }).end('500 ' + e.message);
   }
 }).listen(PORT, '0.0.0.0', () => {
-  console.log('MailDrop on http://127.0.0.1:' + PORT + '/   (root: ' + ROOT + ')');
+  const port = server.address().port;
+  // the tests read this line to find an ephemeral port
+  console.log('SERVEPORT=' + port);
+  console.log('MailDrop on http://127.0.0.1:' + port + '/   (root: ' + ROOT + ')');
 });
