@@ -99,9 +99,24 @@ bucket secret key — if you want config in the repo, put your key id in
 // lib/config.js — optional, plain file, no secrets
 MD.config = {
   s3: { endpoint: 's3.eu-central-003.backblazeb2.com', bucket: 'mail', region: 'eu-central-003',
-        keyId: '004xxxxxxxxxxxx', keyPrefix: 'drop/' }
+        keyId: '004xxxxxxxxxxxx', keyPrefix: 'drop/' },
+  stallSeconds: 120,     // give up on a connection that has gone quiet (0 = never)
+  uploadAttempts: 3,     // tries per part before the job reports failure
+  maxMemoryBlob: '1.5GB' // ceiling for browsers that cannot stream a download to disk
 };
 ```
+
+Those three behaviour knobs exist because a deployment is not one network. A
+corporate proxy that black-holes a request is the failure `stallSeconds` catches —
+without it an upload sits at "part 3 of 28" forever, since `XMLHttpRequest` has no
+timeout by default. A line that drops sessions wants more `uploadAttempts`. And a
+kiosk with 4 GB of RAM on Firefox should find out it cannot hold a 5 GiB download
+in a tab *before* it spends six minutes downloading it.
+
+`maxMemoryBlob` is only consulted when the browser offers no way to stream to disk
+(Chrome and Edge do, via the save-file picker; Safari and Firefox do not). Where
+`navigator.deviceMemory` is available the page uses 30 % of reported RAM instead of
+the literal, so the number here is the fallback, not the rule.
 
 `lib/config.js` ships with every key commented out, so it costs nothing to leave
 it alone. Values there are only a starting point: anything a browser has already

@@ -22,14 +22,18 @@ Both are enough to send a few tens of gigabytes a month and never look at a bill
        "corsRuleName": "maildrop",
        "allowedOrigins": ["https://<you>.github.io"],
        "allowedHeaders": ["*"],
-       "allowedOperations": ["s3_put", "s3_get", "s3_head"],
+       "allowedOperations": ["s3_put", "s3_get", "s3_head", "s3_delete"],
        "exposeHeaders": ["etag", "content-length"]
      }
    ]
    ```
    Add a second entry with `"*"` as the origin while you test, then tighten it.
    *`s3_put` is the one people forget: without it the browser sends the file and
-   the bucket answers 403 with no useful message.*
+   the bucket answers 403 with no useful message.* `s3_delete` is optional and
+   only used for one thing: when a send dies partway, the page deletes the parts it
+   had already stored so an abandoned upload does not sit in your bucket until the
+   lifecycle rule finds it. Leave it out and the page tells you which objects
+   survived instead.
 4. Bucket → *Settings* → **Lifecycle Rules**: files auto-delete after *n* days.
    This is how "expires in 3 days" happens on your own bucket — MailDrop tells the
    recipient the expiry from the same number, so keep them in step.
@@ -44,7 +48,8 @@ Both are enough to send a few tens of gigabytes a month and never look at a bill
 2. *Manage Development API Tokens* (R2 → *API*) → **Create API Token** →
    *Object Read & Write* → scoped to that bucket → **Access Key ID** and
    **Secret Access Key**.
-3. Settings → *CORS policy* → `AllowedMethods: PUT, GET, HEAD`,
+3. Settings → *CORS policy* → `AllowedMethods: PUT, GET, HEAD, DELETE`
+   (`DELETE` only for the abandoned-upload cleanup, see above),
    `AllowedOrigins: https://<you>.github.io`, `AllowedHeaders: *`.
 4. Endpoint: `https://<account-id>.s3.r2.cloudflarestorage.com`, region `auto`.
 5. Expiry: R2 has no lifecycle rule on the free plan, so set **Default expiry** in

@@ -33,7 +33,7 @@ let seen = [];
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range, X-Requested-With');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
 }
@@ -62,6 +62,15 @@ const server = http.createServer((req, res) => {
   }
 
   // ---- upload: litterbox-style multipart POST ----------------------------
+  // A host that accepts the request and then says nothing at all. This is the
+  // failure mode a timeout-free fetch cannot survive, so the stall watchdog needs
+  // a server that actually does it: no response, no reset, silence.
+  if (url.pathname === '/stall' || url.pathname.startsWith('/stall/')) {
+    const kill = setTimeout(() => req.destroy(), 30000);
+    kill.unref && kill.unref();
+    return;
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/upload') {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
@@ -123,6 +132,16 @@ const server = http.createServer((req, res) => {
   }
 
   // ---- download, with byte ranges + occasional forced range use ----------
+  if (req.method === 'DELETE' && url.pathname.startsWith('/bucket/')) {
+    const id = url.pathname.slice('/bucket/'.length);
+    if (!STORE.has(id)) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('not there (mock store)'); return; }
+    STORE.delete(id);
+    seen.push('DELETE /bucket/' + id);
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname.startsWith('/f/')) {
     const id = url.pathname.slice(3);
     const rec = STORE.get(id);

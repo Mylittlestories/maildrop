@@ -364,5 +364,23 @@ function randFile(size, name) {
     }
   });
 
+  section('a delete, signed as a delete');
+  await test('an empty body hashes to the constant a DELETE signature uses', async () => {
+    eq(await MD.crypto.sha256Hex(new Uint8Array(0)),
+       'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+       'if this drifts, every delete the page signs is rejected by the bucket');
+  });
+  await test('presigning a delete produces a different signature than presigning the upload', async () => {
+    const cfg = { endpoint: 's3.example.com', bucket: 'mail', region: 'auto', keyId: 'K', secret: 'S', keyPrefix: 'd/' };
+    const at = '20260101T000000Z';
+    const put = await MD.backends.s3.presignPutUrl(cfg, 'd/2026/x.bin', 10, { amzDate: at });
+    const del = await MD.backends.s3.presignPutUrl(cfg, 'd/2026/x.bin', 0, { amzDate: at, method: 'DELETE' });
+    eq(del.url.split('?')[0], put.url.split('?')[0], 'same object, same address');
+    ok(del.url !== put.url, 'but a different signature — the method is part of what is signed');
+    ok(/X-Amz-Algorithm=AWS4-HMAC-SHA256/.test(del.url), 'and it is still a presigned URL: ' + del.url.slice(0, 90));
+    const put2 = await MD.backends.s3.presignPutUrl(cfg, 'd/2026/x.bin', 10, { amzDate: at });
+    eq(put2.url, put.url, 'the upload signature is stable, byte for byte');
+  });
+
   report('unit');
 })();

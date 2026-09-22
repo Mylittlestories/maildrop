@@ -83,3 +83,12 @@ only in that tab's memory — closing it is the delete.
 Nothing in this project offers "shred" or "revoke a sent link", and no tool can,
 once the bytes are on a host and the link in an inbox. That is a property of email,
 not of this page.
+
+A send you abandon halfway is a smaller version of the same problem, and it is the
+one place the page can act: 6 of 28 parts on the host have no link pointing at
+them, but they are still bytes on somebody's disk. On a free host there is no
+delete API, so the page tells you how many parts are stranded and until when,
+rather than letting "Cancelled" imply that nothing was stored. On your own bucket
+it holds the credentials, so it uses them: parts already uploaded are deleted the
+moment the job dies or you press Cancel, and the report says how many were
+removed. That needs `DELETE` in the bucket's CORS settings — see SETUP-BUCKET.md.

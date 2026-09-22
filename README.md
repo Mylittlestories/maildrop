@@ -235,7 +235,9 @@ lib/receive.js      download, verify, stitch, write to disk
 lib/email.js        subject, body, mailto:
 lib/ui.js           every DOM read and write
 lib/app.js          the two flows and the settings that drive them
-lib/config.js       optional pre-configuration for a shared deployment
+lib/config.js       optional pre-configuration for a shared deployment (bucket, part
+                    size, and the three behaviour knobs: stall seconds, upload
+                    attempts, in-memory ceiling)
 tools/              mock host (tests) and a live provider check
 tests/              four suites + a harness
 ```

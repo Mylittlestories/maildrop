@@ -103,3 +103,23 @@ would reliably kill the tab. `node tools/stress-5gb.mjs` runs 5 GiB through the
 real page on a 2 GB machine and asserts the file arrives byte-identical; the
 largest window it ever held was 16 MiB (`tests/integration.test.js` asserts that
 directly too).
+
+Where the browser offers no way to stream to disk — Safari, and Firefox until its
+save-file picker ships — the whole file would have to be held in memory, and that
+is not a thing a 5 GiB transfer survives. The page therefore refuses above a
+stated ceiling (`MD.config.maxMemoryBlob`, or 30 % of `navigator.deviceMemory`
+where the browser reports one) instead of trying and dying, and hands over the
+host address so the file can still be had.
+
+## What an abandoned upload leaves behind
+
+A send that fails or is cancelled at part 7 has put 6 parts on the host. No link
+points at them, so nothing can be reassembled — but the bytes exist until the
+host's clock deletes them, and a free host offers no way to hurry that along. The
+page says so plainly rather than letting "Cancelled" imply nothing happened.
+
+A bucket you hold credentials for is different: `MD.app` deletes the parts it
+already stored when a job dies, so an abandoned upload does not outlive the
+decision to make it. This needs `DELETE` allowed in the bucket's CORS settings;
+without it the page reports which objects survived and leaves the keys in the
+failed link so they can be removed by hand.

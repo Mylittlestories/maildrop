@@ -367,6 +367,56 @@ let mock;
     ok(biggest <= MDx.receive.CHUNK, 'the largest window was ' + biggest + ' bytes');
   });
 
+  await test('a send that dies partway deletes what it already put in your bucket', async () => {
+    const sb = freshSandbox();
+    const MDx = sb.MD;
+    const self = MDx.backends.get('selfhost');
+    Object.assign(MDx.app.state.cfg, {
+      backend: 'selfhost', password: '', partCapBytes: '1MB',
+      receiveBase: BASE + 'index.html',
+      s3: { endpoint: 'http://127.0.0.1:' + PORT, bucket: 'bucket', region: 'auto', keyId: 'k', secret: 's', keyPrefix: 'stranded/' }
+    });
+    MDx.app.state.files = [new sb.File([crypto.randomBytes(4 * 1024 * 1024)], 'vault.zip', { type: 'application/zip' })];
+    // the second part fails with nothing to retry, so the job dies with one stored
+    const orig = self.upload.bind(self);
+    const keys = [];
+    let n = 0;
+    self.upload = async function (body, opts) {
+      n++;
+      // refuse *before* storing, so the app knows exactly what is on the host
+      if (n === 3) { const e = new Error('the host refused this part'); e.retryable = false; throw e; }
+      const r = await orig(body, opts);
+      keys.push(r.id);
+      return r;
+    };
+    await MDx.app.runSend();
+    eq(keys.length, 2, 'two parts were stored before the job died');
+    const notes = uiCalls.filter((c) => c[0] === 'note' || c[0] === 'warn').map((c) => c[1]).join(' | ');
+    ok(/2 of 2 uploaded parts were deleted from your bucket/.test(notes), 'the report counts what it cleaned: ' + notes.slice(-200));
+    for (const k of keys) {
+      const after = await fetch(BASE + 'f/' + k);
+      eq(after.status, 404, 'and ' + k + ' is gone — a signed DELETE went through');
+    }
+  });
+
+  await test('a host that accepts the request and then says nothing is given up on', async () => {
+    // /stall on the mock host never answers. Without a watchdog this is the one
+    // failure mode that leaves the job spinning forever with nothing to report.
+    const sb = freshSandbox();
+    const MDx = sb.MD;
+    MDx.config = { stallSeconds: 1 };
+    const t0 = Date.now();
+    let err = null;
+    try { await MDx.receive.streamPart(BASE + 'stall/quiet.bin', 4096, () => { }); }
+    catch (e) { err = e; }
+    const secs = (Date.now() - t0) / 1000;
+    ok(err, 'the read failed instead of hanging');
+    ok(err.stalled, 'and it is reported as a stall: ' + err.message);
+    ok(/quiet|given up/.test(err.message), 'the message says what happened: ' + err.message);
+    eq(err.retryable, true, 'a stall is worth another attempt');
+    ok(secs > 0.9 && secs < 8, 'it gave up after ' + secs.toFixed(1) + 's, not before the window and not long after');
+  });
+
   report('integration');
   mock && mock.kill();
   process.exit(process.exitCode || 0);

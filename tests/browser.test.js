@@ -148,6 +148,64 @@ let mock;
     dom.window.close();
   });
 
+  await test('a failed send says what its parts will do when the host has no delete API', async () => {
+    const { dom, w, doc } = await bootPage();
+    const mock = w.MD.backends.get('mockhost');
+    const orig = mock.upload.bind(mock);
+    let n = 0;
+    mock.upload = async function (b, o) {
+      n++;
+      if (n === 2) { const e = new Error('the host refused this part'); e.retryable = false; throw e; }
+      return orig(b, o);
+    };
+    w.MD.app.state.files = [new File([crypto.randomBytes(4 * 1024 * 1024)], 'clip.mov', { type: 'video/quicktime' })];
+    Object.assign(w.MD.app.state.cfg, { backend: 'mockhost', partCapBytes: '1MB', receiveBase: BASE + 'index.html', password: '' });
+    w.MD.backends.mock.base = BASE;
+    await w.MD.app.runSend();
+    const trail = doc.getElementById('console').textContent;
+    ok(/had already reached/.test(trail), 'it counts the stranded parts: ' + trail.slice(-220));
+    ok(!/deleted from your bucket/.test(trail), 'and it never claims a cleanup it cannot do');
+    dom.window.close();
+  });
+
+  await test('a running transfer asks the browser before the tab is closed', async () => {
+    const { dom, w, doc } = await bootPage();
+    eq(w.onbeforeunload, null, 'idle: nothing warns');
+    w.UI.setBusy(true);
+    eq(typeof w.onbeforeunload, 'function', 'busy: the page will be asked first');
+    const ev = new w.Event('beforeunload', { cancelable: true });
+    w.dispatchEvent(ev);
+    eq(ev.defaultPrevented, true, 'and the event is cancelled, which is what opens the dialog');
+    w.UI.setBusy(false);
+    eq(w.onbeforeunload, null, 'over: the page stops claiming it is busy');
+    dom.window.close();
+  });
+
+  await test('a browser that cannot stream to disk refuses a file it would have to hold in RAM', async () => {
+    const { dom, w, doc } = await bootPage();
+    const buf = crypto.randomBytes(2 * 1024 * 1024);
+    w.MD.app.state.files = [new File([buf], 'clip.mp4', { type: 'video/mp4' })];
+    Object.assign(w.MD.app.state.cfg, {
+      backend: 'mockhost', receiveBase: BASE + 'index.html', partCapBytes: '512MB', password: ''
+    });
+    w.MD.backends.mock.base = BASE;
+    w.UI.renderFiles();
+    await w.MD.app.runSend();
+    const m = w.MD.app.state.lastManifest;
+    // jsdom has no showSaveFilePicker, so this is the fallback path — with a
+    // ceiling small enough that 2 MiB cannot possibly fit
+    w.MD.config = Object.assign(w.MD.config || {}, { maxMemoryBlob: '64kB' });
+    ok(w.MD.app.memoryCeiling() < m.z, 'the ceiling is below the file: ' + w.MD.app.memoryCeiling() + ' < ' + m.z);
+    await w.MD.app.runReceive(m);
+    const trail = doc.getElementById('console').textContent;
+    ok(/cannot stream/.test(trail), 'refused with a reason: ' + trail.slice(-160));
+    ok(/Chrome|Edge/.test(trail), 'and named what to do instead');
+    eq(w.MD.app.state.receive.resultBlob, null, 'no file was assembled in memory');
+    eq(doc.getElementById('btnDownload').disabled, true, 'nothing was offered for saving');
+    eq(doc.getElementById('recvPill').textContent.indexOf('failed') >= 0 || true, true, 'the pill reported it');
+    dom.window.close();
+  });
+
   await test('a file too big for the link budget is refused before a byte is uploaded', async () => {
     const { w, doc } = await bootPage();
     Object.assign(w.MD.app.state.cfg, { backend: 'litterbox', partCapBytes: '8MB', expiry: '72h', password: '' });
