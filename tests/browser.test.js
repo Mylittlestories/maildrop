@@ -41,7 +41,7 @@ const PREAMBLE = [
 ].join("\n");
 
 
-// Inline the nine scripts so jsdom runs them in a real window scope, exactly as
+// Inline the ten scripts so jsdom runs them in a real window scope, exactly as
 // the browser would; only the shims above differ.
 function buildHtml() {
   let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
