@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MailDrop — send big files by email link, no account, no server</title>
+<meta name="description" content="Pack any file into an email-safe download link. Static page, no backend, no subscription, nothing to install. Files go from your browser straight to a temporary host; the link is what travels by email.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b1220'/%3E%3Cpath d='M12 20h40v24H12z' fill='none' stroke='%2338bdf8' stroke-width='4'/%3E%3Cpath d='M12 22l20 15 20-15' fill='none' stroke='%2338bdf8' stroke-width='4'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#070b14; --bg2:#0d1424; --card:#111a2c; --card2:#0e1626; --line:#22304a;
+  --txt:#e8eef8; --dim:#94a3b8; --dim2:#64748b;
+  --accent:#38bdf8; --accent2:#0ea5e9; --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1100px 600px at 12% -8%, #10233b 0%, transparent 60%),
+    radial-gradient(900px 500px at 92% 4%, #1a1030 0%, transparent 55%),
+    var(--bg);
+  color:var(--txt); font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif;
+  min-height:100vh; padding-bottom:70px;
+}
+a{color:var(--accent)}
+header{display:flex;align-items:center;gap:14px;padding:18px 20px 8px;max-width:1080px;margin:0 auto;flex-wrap:wrap}
+.logo{font-size:22px;font-weight:650;letter-spacing:.2px;display:flex;align-items:center;gap:9px}
+.logo .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 16px var(--accent)}
+.tagline{color:var(--dim);font-size:13px;margin-left:2px}
+nav{margin-left:auto;display:flex;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:4px}
+nav button{all:unset;cursor:pointer;padding:7px 14px;border-radius:9px;font-size:14px;color:var(--dim);font-weight:550}
+nav button.on{background:linear-gradient(180deg,#1b2c48,#16233a);color:var(--txt);box-shadow:inset 0 0 0 1px #2b4166}
+main{max-width:1080px;margin:0 auto;padding:10px 20px}
+section{display:none}
+section.on{display:block}
+.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:16px;padding:18px}
+.row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.grow{flex:1 1 260px;min-width:0}
+.drop{
+  border:1.5px dashed #2f4468;border-radius:16px;padding:34px 20px;text-align:center;
+  background:rgba(56,189,248,.045);transition:.16s;cursor:pointer
+}
+.drop.hot{border-color:var(--accent);background:rgba(56,189,248,.13)}
+.drop b{font-size:16px}
+.drop p{margin:6px 0 0;color:var(--dim);font-size:13px}
+.fl{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;margin-top:10px;background:#0b1321}
+.fl .nm{font-weight:600;word-break:break-all}
+.fl .mt{color:var(--dim);font-size:12.5px}
+.fl .x{margin-left:auto;all:unset;cursor:pointer;color:var(--dim);padding:5px 9px;border-radius:8px}
+.fl .x:hover{background:#1b2942;color:var(--txt)}
+label.f{display:block;font-size:12px;color:var(--dim);margin:0 0 5px;font-weight:600;letter-spacing:.2px;text-transform:uppercase}
+input,select,textarea{
+  width:100%;background:#0a1120;color:var(--txt);border:1px solid var(--line);border-radius:10px;
+  padding:9px 11px;font:inherit;font-size:14px;outline:none
+}
+input:focus,select:focus,textarea:focus{border-color:#2f6d94;box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+textarea{font-family:var(--mono);font-size:12.5px;min-height:84px;resize:vertical}
+input[type=checkbox]{width:auto}
+button.btn{
+  all:unset;cursor:pointer;padding:10px 16px;border-radius:11px;font-weight:650;font-size:14.5px;
+  background:linear-gradient(180deg,#38bdf8,#0284c7);color:#031018;text-align:center;
+  box-shadow:0 6px 18px rgba(2,132,199,.28)
+}
+button.btn:hover{filter:brightness(1.07)}
+button.btn.ghost{background:#132038;color:var(--txt);box-shadow:none;border:1px solid var(--line)}
+button.btn.ok{background:linear-gradient(180deg,#34d399,#059669);color:#032118}
+button.btn.small{padding:7px 11px;font-size:13px;font-weight:600}
+button.btn[disabled]{opacity:.45;cursor:not-allowed;filter:grayscale(.3)}
+.bar{height:9px;border-radius:99px;background:#132038;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#818cf8);transition:width .2s}
+.mini{color:var(--dim);font-size:12.5px}
+.mono{font-family:var(--mono);font-size:12.5px}
+pre.box{
+  font-family:var(--mono);font-size:12px;background:#070d18;border:1px solid var(--line);border-radius:11px;
+  padding:11px;white-space:pre-wrap;word-break:break-all;max-height:230px;overflow:auto;margin:8px 0 0;color:#cfe6f7
+}
+.pill{display:inline-flex;gap:6px;align-items:center;padding:3px 9px;border-radius:99px;background:#132038;border:1px solid var(--line);font-size:12px;color:var(--dim)}
+.pill.ok{color:var(--ok);border-color:#155e45;background:#08251c}
+.pill.warn{color:var(--warn);border-color:#6b4c07;background:#241a04}
+.pill.bad{color:var(--bad);border-color:#7f1d1d;background:#240808}
+h2{font-size:17px;margin:0 0 12px;font-weight:650}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;font-weight:650}
+.note{border-left:3px solid #2f4468;padding:2px 0 2px 11px;margin:11px 0;color:#c7d5e8;font-size:13.5px}
+.note.warn{border-color:var(--warn);color:#f3dfae}
+.note.bad{border-color:var(--bad);color:#f6c9c9}
+.note.ok{border-color:var(--ok);color:#b9ecd8}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px}
+#console{max-height:180px;overflow:auto;font-family:var(--mono);font-size:11.5px;color:#9fb6d0;background:#060b14;border:1px solid var(--line);border-radius:10px;padding:9px;display:none;white-space:pre-wrap}
+#console.on{display:block}
+#console .e{color:#f6a5a5}#console .w{color:#f0d9a0}#console .s{color:#a9f0d1}
+footer{max-width:1080px;margin:26px auto 0;padding:0 20px;color:var(--dim2);font-size:12.5px;line-height:1.7}
+hr{border:none;border-top:1px solid var(--line);margin:16px 0}
+@media (max-width:620px){header{padding-top:14px}nav{margin-left:0;width:100%;justify-content:space-between}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><span class="dot"></span>MailDrop</div>
+  <div class="tagline">big files → email link · no account · no subscription · no server of yours</div>
+  <nav>
+    <button data-tab="send" class="on">Send</button>
+    <button data-tab="receive">Receive</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+</header>
+<main>
+<div id="context" class="row" style="margin:6px 0 14px"></div>
+
+<section id="panel-send" class="on">
+  <div class="card">
+    <div class="drop" id="drop">
+      <b>Drop one file here</b>
+      <p>or click to browse · any size · nothing is uploaded until you press Start</p>
+      <input type="file" id="fileInput" hidden>
+    </div>
+    <div id="directBox" hidden>
+      <label class="f" for="directUrl">The download URL you already have</label>
+      <input id="directUrl" placeholder="https://some-host.com/files/clip.mov" autocomplete="off" spellcheck="false">
+      <div class="mini" style="margin-top:8px">Nothing is uploaded from this page. MailDrop turns the URL into a tidy email, and — if the host allows cross-origin reads — rebuilds and verifies the file in the receive page. If it does not, the page just hands the link to the recipient.</div>
+    </div>
+    <div id="fileWrap">
+      <div id="fileList"></div>
+    </div>
+    <div id="planBox"></div>
+
+    <div class="row" style="margin-top:14px">
+      <div class="grow">
+        <label class="f" for="backendSel">Where the file sits</label>
+        <select id="backendSel"></select>
+      </div>
+      <div class="grow">
+        <label class="f" for="expirySel">Expires after</label>
+        <select id="expirySel"></select>
+      </div>
+      <div class="grow">
+        <label class="f" for="capInput">Max size per part</label>
+        <input id="capInput" placeholder="auto (provider cap)" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <div class="grow" id="pwWrap">
+        <label class="f" for="pwInput">Password (optional)</label>
+        <input id="pwInput" type="text" placeholder="leave empty = no encryption" autocomplete="off" spellcheck="false">
+      </div>
+      <div style="align-self:flex-end">
+        <label class="mini" style="text-transform:none;font-weight:500;display:flex;gap:7px;align-items:center;padding-bottom:9px">
+          <input type="checkbox" id="includeToken"> include the raw code in the email text
+        </label>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:16px">
+      <button class="btn" id="btnStart" disabled>Start transfer</button>
+      <button class="btn ghost" id="btnCancel" hidden>Cancel</button>
+      <button class="btn ghost" id="btnDemo">Try it with a 4 MB sample file</button>
+      <span class="mini" id="sendHint"></span>
+    </div>
+  </div>
+
+  <div class="card" id="progressCard" hidden style="margin-top:14px">
+    <div class="row"><h2 style="margin:0">Progress</h2><span class="pill" id="progPill">working</span></div>
+    <div class="bar" style="margin-top:10px"><i id="progBar"></i></div>
+    <div class="mini" id="progMsg" style="margin-top:8px">…</div>
+  </div>
+
+  <div class="card" id="linkCard" hidden style="margin-top:14px">
+    <div class="row">
+      <h2 style="margin:0">Your download link</h2>
+      <span class="pill ok" id="linkStats"></span>
+    </div>
+    <textarea id="linkText" readonly></textarea>
+    <details class="note" id="linkBackup" hidden style="margin-top:12px">
+      <summary>Backup: one short link per part</summary>
+      <div class="mini" style="margin:8px 0">If a mail client or filter rejects the long link, send these instead — the receive page merges them back into one job.</div>
+      <div id="linkBackupList"></div>
+    </details>
+    <div class="row" style="margin-top:10px">
+      <button class="btn small" id="btnCopyLink">Copy link</button>
+      <button class="btn small ghost" id="btnCopyCode">Copy code only</button>
+      <button class="btn small ghost" id="btnOpenLink">Preview the page a recipient sees</button>
+      <button class="btn small ghost" id="btnShare" hidden>Share…</button>
+    </div>
+
+    <h3>Email draft</h3>
+    <div class="row">
+      <div class="grow"><label class="f" for="toInput">To</label><input id="toInput" placeholder="name@example.com" autocomplete="off"></div>
+      <div class="grow"><label class="f" for="subjInput">Subject</label><input id="subjInput" autocomplete="off"></div>
+    </div>
+    <textarea id="bodyText" style="min-height:190px"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ok" id="btnMailto">Open in my mail app</button>
+      <button class="btn small ghost" id="btnCopyMail">Copy the whole message</button>
+      <button class="btn small ghost" id="btnCopyFile">Copy link + message to a file</button>
+    </div>
+    <div class="note" id="linkNote"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="row"><h2 style="margin:0">Recent transfers on this device</h2><button class="btn small ghost" id="btnClearHist">Clear</button></div>
+    <div id="histList" class="mini">nothing yet</div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn small ghost" id="btnConsole">Debug log</button>
+    </div>
+    <pre id="console"></pre>
+  </div>
+</section>
+
+<section id="panel-receive">
+  <div class="card">
+    <h2>Receive a file</h2>
+    <div class="row">
+      <div class="grow">
+        <label class="f" for="pasteBox">Paste the link — or the whole email, no need to trim it</label>
+        <textarea id="pasteBox" placeholder="https://…/#ab2cd3ef…   (or paste the entire message)"></textarea>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="btnDecode">Open</button>
+      <button class="btn small ghost" id="btnAddPart">Add another link from another email</button>
+      <span class="mini">Or just open the link — this page reads the part after the <span class="mono">#</span> and starts on its own.</span>
+    </div>
+  </div>
+
+  <div class="card" id="recvCard" hidden style="margin-top:14px">
+    <div class="row"><h2 style="margin:0" id="recvName">file</h2><span class="pill" id="recvPill">ready</span></div>
+    <div id="recvMeta" class="mini"></div>
+    <div id="recvParts" style="margin-top:12px"></div>
+    <div id="recvPwBox" hidden style="margin-top:12px">
+      <label class="f" for="recvPw">Password (the sender sends it separately)</label>
+      <div class="row"><input id="recvPw" class="grow" type="text" autocomplete="off"><button class="btn small ghost" id="btnApplyPw">Apply</button></div>
+    </div>
+    <div class="bar" style="margin-top:14px"><i id="recvBar"></i></div>
+    <div class="mini" id="recvMsg" style="margin-top:8px">—</div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn ok" id="btnDownload" disabled>Download &amp; save file</button>
+      <button class="btn small ghost" id="btnRetry" hidden>Retry download</button>
+    </div>
+    <div class="row" style="margin-top:10px" id="recvDirectRow" hidden>
+      <a class="btn ok" id="recvDirect" target="_blank" rel="noopener" style="text-decoration:none">Open it on the host</a>
+      <span class="mini" id="recvDirectHint"></span>
+    </div>
+    <div class="note" id="recvNote"></div>
+  </div>
+</section>
+
+<section id="panel-settings">
+  <div class="card">
+    <h2>Settings</h2>
+    <div class="note">Saved in this browser only (localStorage). Nothing is sent anywhere, and no account is involved.</div>
+
+    <h3>Delivery</h3>
+    <div class="grid">
+      <div><label class="f" for="sBackend">Provider</label><select id="sBackend"></select></div>
+      <div><label class="f" for="sExpiry">Default expiry</label><select id="sExpiry"></select></div>
+      <div><label class="f" for="sCap">Max part size (e.g. 900MB)</label><input id="sCap" autocomplete="off"></div>
+      <div><label class="f" for="sReceiveBase">Receive page URL (where you host this repo)</label><input id="sReceiveBase" placeholder="https://you.github.io/maildrop/" autocomplete="off"></div>
+    </div>
+    <div id="backendBlurb" class="mini" style="margin-top:10px"></div>
+
+    <h3>Your own bucket (only way past ~1 GB per part)</h3>
+    <div class="note">Any S3-compatible bucket: Backblaze B2 (10 GB free), Cloudflare R2 (10 GB free, no egress fees), Wasabi, MinIO… The browser signs the request itself and PUTs straight to the bucket — no proxy, no code to run. You must tick <span class="mono">CORS → allow PUT</span> on the bucket once (<a href="docs/SETUP-BUCKET.md">five-minute setup</a>).</div>
+    <div class="grid">
+      <div><label class="f" for="sEp">Endpoint URL</label><input id="sEp" placeholder="https://s3.us-west-004.backblazeb2.com" autocomplete="off"></div>
+      <div><label class="f" for="sBk">Bucket</label><input id="sBk" autocomplete="off"></div>
+      <div><label class="f" for="sRg">Region</label><input id="sRg" placeholder="auto" autocomplete="off"></div>
+      <div><label class="f" for="sPre">Key prefix</label><input id="sPre" placeholder="maildrop/" autocomplete="off"></div>
+      <div><label class="f" for="sKey">Key ID</label><input id="sKey" autocomplete="off" spellcheck="false"></div>
+      <div><label class="f" for="sSec">Application key / secret</label><input id="sSec" type="password" autocomplete="off" spellcheck="false"></div>
+      <div><label class="f" for="sPub">Public base URL (optional, for a CDN)</label><input id="sPub" placeholder="https://cdn.example.com" autocomplete="off"></div>
+      <div><label class="f" for="sExp2">Presigned URL lifetime (s)</label><input id="sExp2" placeholder="86400" autocomplete="off"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn small ghost" id="btnTestBucket">Check the config (signs a URL)</button>
+      <button class="btn small ghost" id="btnTestReal">…and really upload 1 byte</button>
+      <span class="mini" id="s3Hint"></span>
+    </div>
+    <pre id="s3out" class="box" hidden></pre>
+
+    <h3>Danger zone</h3>
+    <div class="row">
+      <button class="btn small ghost" id="btnWipe">Forget settings, history and test-mode data</button>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <b>How this is different from WeTransfer:</b> there is no MailDrop service. The bytes travel from your browser directly to a temporary host (or to your own bucket), and the email carries only a link whose <span class="mono">#part</span> holds the manifest — hashes are never sent to a server, so nothing about your file is logged anywhere.
+  Recipients click once, save, done.
+  <br>Free public hosts rate-limit and cap sizes; expect ~1 GB per part. For daily use, wire up a bucket and the cap becomes the bucket's.
+  <br>Everything here is static files: <span class="mono">index.html</span> + <span class="mono">lib/*.js</span>. Push to a GitHub repo, enable Pages, done — <a href="docs/DEPLOY-GITHUB.md">deploy guide</a>,
+  <a href="docs/PRIVACY.md">what happens to your bytes</a>, <a href="docs/PROVIDERS.md">why these providers</a>, <a href="README.md">README</a>.
+</footer>
+
+<script src="lib/util.js"></script>
+<script src="lib/config.js"></script>
+<script src="lib/manifest.js"></script>
+<script src="lib/crypto.js"></script>
+<script src="lib/pack.js"></script>
+<script src="lib/backends.js"></script>
+<script src="lib/receive.js"></script>
+<script src="lib/email.js"></script>
+<script src="lib/ui.js"></script>
+<script src="lib/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+node_modules/
+.probe/
+*.log
+.live-check-*.bin
+.DS_Store
+# local-only config that happens to hold a key id you do not want published
+lib/config.local.js
