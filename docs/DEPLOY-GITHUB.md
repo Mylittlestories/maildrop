@@ -61,6 +61,25 @@ count as secure, but plain `http://192.168.1.20/` does not, and the page will sa
 so in the context badges rather than fail confusingly. Use the GitHub Pages
 `https://` URL and there is nothing to think about.
 
+## The CSP header this page ships with
+
+`index.html` carries
+
+```html
+<meta http-equiv="Content-Security-Policy"
+      content="script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+```
+
+It is what makes "a manifest from someone else's email" survivable: even if a future
+change forgot a URL check, a `javascript:` payload cannot execute, because no
+script that is not one of this folder's ten files is allowed to run. Two
+consequences if you edit the page: **do not add inline `<script>` blocks or
+`onclick=` attributes** (add a file in `lib/` instead), and if you serve the page
+with your own CSP header, keep `script-src 'self'` — the app needs no other
+script source. Styles stay inline on purpose, so `style-src` is deliberately not
+restricted; `connect-src` must stay open because the whole design is "fetch from
+whatever host the sender chose".
+
 ## Updating
 
 Edit, `git push`, wait ~30 s. Because the app is stateless — everything about a

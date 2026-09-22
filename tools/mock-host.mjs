@@ -9,7 +9,26 @@ import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const STORE = new Map(); // id -> { buf, type }
+const STORE = new Map(); // id -> { buf, type } | { file, size, type }
+
+// MOCK_DIR=<path> keeps each stored object in a file instead of in RAM, which is
+// what makes a multi-gigabyte stress run possible at all — a mock that holds the
+// whole corpus in memory is not a mock of a file host, it is a second OOM.
+const DISK = process.env.MOCK_DIR ? path.resolve(process.env.MOCK_DIR) : null;
+if (DISK) fs.mkdirSync(DISK, { recursive: true });
+
+function pathFor(id) { return path.join(DISK, crypto.createHash('sha1').update(String(id)).digest('hex').slice(0, 24) + '.part'); }
+function sizeOf(rec) { return rec.buf ? rec.buf.length : rec.size; }
+
+async function readRange(rec, from, len) {
+  if (rec.buf) return rec.buf.subarray(from, from + len);
+  const fd = await fs.promises.open(rec.file, 'r');
+  try {
+    const buf = Buffer.allocUnsafe(len);
+    const { bytesRead } = await fd.read(buf, 0, len, from);
+    return buf.subarray(0, bytesRead);
+  } finally { await fd.close(); }
+}
 let seen = [];
 
 function cors(res) {
@@ -68,7 +87,13 @@ const server = http.createServer((req, res) => {
         res.writeHead(413, { 'Content-Type': 'text/plain' }); res.end('file too large (mock cap)'); return;
       }
       const id = crypto.randomBytes(4).toString('hex') + (path.extname(filename) || '.bin');
-      STORE.set(id, { buf: fileBuf, type: 'application/octet-stream', filename });
+      if (DISK) {
+        const f = pathFor(id);
+        fs.writeFileSync(f, fileBuf);
+        STORE.set(id, { file: f, size: fileBuf.length, type: 'application/octet-stream', filename });
+      } else {
+        STORE.set(id, { buf: fileBuf, type: 'application/octet-stream', filename });
+      }
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       // absolute URL built from the request's own Host, so any port works
       res.end('http://' + (req.headers.host || '127.0.0.1:' + PORT) + '/f/' + id);
@@ -83,8 +108,15 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       const buf = Buffer.concat(chunks);
       const id = url.pathname.slice('/bucket/'.length);
-      STORE.set(id, { buf, type: req.headers['content-type'] || 'application/octet-stream', filename: id.split('/').pop() });
-      res.writeHead(200, { 'Content-Type': 'text/plain', 'ETag': '"' + crypto.createHash('sha1').update(buf).digest('hex') + '"' });
+      const etag = '"' + crypto.createHash('sha1').update(buf).digest('hex') + '"';
+      if (DISK) {
+        const f = pathFor(id);
+        fs.writeFileSync(f, buf);
+        STORE.set(id, { file: f, size: buf.length, type: req.headers['content-type'] || 'application/octet-stream', filename: id.split('/').pop() });
+      } else {
+        STORE.set(id, { buf, type: req.headers['content-type'] || 'application/octet-stream', filename: id.split('/').pop() });
+      }
+      res.writeHead(200, { 'Content-Type': 'text/plain', 'ETag': etag });
       res.end('');
     });
     return;
@@ -95,27 +127,33 @@ const server = http.createServer((req, res) => {
     const id = url.pathname.slice(3);
     const rec = STORE.get(id);
     if (!rec) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('gone (mock store lost the file)'); return; }
+    const total = sizeOf(rec);
     const range = req.headers.range;
     if (range) {
       const m = /bytes=(\d+)-(\d*)/.exec(range);
       const from = Number(m[1]);
-      const to = m[2] ? Math.min(Number(m[2]), rec.buf.length - 1) : rec.buf.length - 1;
+      const to = m[2] ? Math.min(Number(m[2]), total - 1) : total - 1;
       const len = to - from + 1;
       res.writeHead(206, {
-        'Content-Range': 'bytes ' + from + '-' + to + '/' + rec.buf.length,
+        'Content-Range': 'bytes ' + from + '-' + to + '/' + total,
         'Content-Length': len, 'Accept-Ranges': 'bytes'
       });
       if (req.method === 'HEAD') return res.end();
-      return res.end(rec.buf.subarray(from, to + 1));
+      return readRange(rec, from, len).then((b) => res.end(b), (e) => { res.writeHead(500); res.end(String(e && e.message)); });
     }
-    res.writeHead(200, { 'Content-Length': rec.buf.length, 'Accept-Ranges': 'bytes', 'Content-Type': rec.type });
+    res.writeHead(200, { 'Content-Length': total, 'Accept-Ranges': 'bytes', 'Content-Type': rec.type });
     if (req.method === 'HEAD') return res.end();
-    return res.end(rec.buf);
+    if (rec.buf) return res.end(rec.buf);
+    return fs.createReadStream(rec.file).pipe(res);
   }
 
   if (req.method === 'GET' && url.pathname === '/__seen') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ requests: seen, stored: [...STORE.keys()].map((k) => ({ id: k, size: STORE.get(k).buf.length })) }));
+    return res.end(JSON.stringify({
+      requests: seen, mode: DISK ? 'disk' : 'memory',
+      stored: [...STORE.keys()].map((k) => ({ id: k, size: sizeOf(STORE.get(k)) })),
+      bytes: [...STORE.values()].reduce((a, r) => a + sizeOf(r), 0)
+    }));
   }
 
   res.writeHead(404, { 'Content-Type': 'text/plain' });

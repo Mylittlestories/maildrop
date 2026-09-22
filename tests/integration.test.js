@@ -285,6 +285,88 @@ let mock;
     eq(out.toString('hex'), buf.toString('hex'), 'offline round trip works');
   });
 
+  await test('a transfer too big to fold still ends with one binding fingerprint', async () => {
+    const sb = freshSandbox();
+    const buf = crypto.randomBytes(5 * 1024 * 1024);
+    const file = new sb.File([buf], 'chain.bin', { type: 'application/octet-stream' });
+    const MDx = sb.MD;
+    // pretend this file is past the fold limit — the case where the sender used
+    // to give up on a whole-file fingerprint altogether
+    MDx.app.FOLD_LIMIT = 2 * 1024 * 1024;
+    const bk = MDx.backends.get('mockhost');
+    bk.expiries = [{ v: '1h', ms: 3600000 }]; bk.defaultExpiry = '1h';
+    const { manifest } = await drive(sb, file, 'mockhost', { partCapBytes: '1MB' });
+    ok(manifest.parts.length >= 5, 'planned ' + manifest.parts.length + ' parts');
+    eq(manifest.hm, 'parts', 'the fingerprint is the chain of part digests');
+    ok(manifest.h && manifest.h.length === 64, 'and it is still a full-length digest: ' + (manifest.h || '').slice(0, 12) + '…');
+    eq(manifest.d, 3600000, 'the expiry is in the link');
+    ok(manifest.x > Date.now() && manifest.x <= Date.now() + 3600000, 'and so is the absolute deadline it expires at: ' + new Date(manifest.x).toISOString());
+    const res = await receive(sb, manifest);
+    eq(Buffer.from(await res.arrayBuffer()).toString('hex'), buf.toString('hex'), 'bytes identical');
+    MDx.app.FOLD_LIMIT = 8 * 1024 * 1024 * 1024;
+    delete bk.expiries; bk.defaultExpiry = 'session';
+  });
+
+  await test('replacing one part breaks the chain even though its own hash is copied', async () => {
+    const sb = freshSandbox();
+    const buf = crypto.randomBytes(5 * 1024 * 1024);
+    const file = new sb.File([buf], 'chain2.bin', { type: 'application/octet-stream' });
+    const MDx = sb.MD;
+    MDx.app.FOLD_LIMIT = 2 * 1024 * 1024;
+    const { manifest } = await drive(sb, file, 'mockhost', { partCapBytes: '1MB' });
+    // an attacker who can write to the host can copy the recorded part hash; what
+    // they cannot do is make a *different* set of parts still match m.h
+    const raw = Buffer.from(await (await fetch(MD.manifest.partUrl(manifest, 0))).arrayBuffer());
+    const swapped = manifest.parts[0];
+    const other = manifest.parts[2];
+    manifest.parts[0] = Object.assign({}, swapped, { i: other.i, s: other.s, h: swapped.h });
+    manifest.z = manifest.parts.reduce((a, p) => a + p.s, 0) + (raw.length - swapped.s);
+    uiCalls.length = 0;
+    await MDx.app.runReceive(manifest);
+    const ready = uiCalls.filter((c) => c[0] === 'receiveReady').pop();
+    const fail = uiCalls.filter((c) => c[0] === 'error').pop();
+    ok(!ready, 'the tampered job is refused rather than saved: ' + (fail ? fail[1].slice(0, 60) : ''));
+    MDx.app.FOLD_LIMIT = 8 * 1024 * 1024 * 1024;
+  });
+
+  await test('a link with no fingerprints says so instead of claiming success', async () => {
+    const sb = freshSandbox();
+    const buf = crypto.randomBytes(1024 * 1024);
+    const file = new sb.File([buf], 'nohash.bin', { type: 'application/octet-stream' });
+    const { manifest } = await drive(sb, file, 'mockhost');
+    const bare = JSON.parse(JSON.stringify(manifest));
+    bare.h = ''; bare.hm = 'file';
+    bare.parts.forEach((p) => { p.h = ''; });
+    uiCalls.length = 0;
+    sb.MD.app.state.receive.password = '';
+    await sb.MD.app.runReceive(sb.MD.manifest.decode(MD.manifest.encode(bare)));
+    const ready = uiCalls.filter((c) => c[0] === 'receiveReady').pop();
+    ok(ready, 'the file is still delivered');
+    eq(ready[2].verified, false, 'but it is not reported as verified');
+    eq(ready[2].checkable, false, 'and the page is told there was nothing to check');
+  });
+
+  await test('a 950 MiB part does not mean 950 MiB of RAM on the way back', async () => {
+    const sb = freshSandbox();
+    const MDx = sb.MD;
+    const win = MDx.receive.windowFor({ c: MDx.app.HASH_CHUNK });
+    eq(win, MDx.receive.CHUNK, 'plain parts are read in one fixed window');
+    const enc = MDx.receive.windowFor({ e: { bs: 1024 * 1024 }, c: MDx.app.HASH_CHUNK });
+    eq(enc, 1024 * 1024 + MDx.crypto.OVERHEAD, 'encrypted parts are read one whole record at a time');
+    eq(MDx.app.HASH_CHUNK, 16 * 1024 * 1024, 'and the fold window matches it, so nothing has to be buffered ahead');
+    let biggest = 0, windows = 0;
+    const MB = 1024 * 1024;
+    const buf = crypto.randomBytes(40 * MB);
+    const file = new sb.File([buf], 'windows.bin', { type: 'application/octet-stream' });
+    const { manifest } = await drive(sb, file, 'mockhost', { partCapBytes: '48MB' });
+    eq(manifest.parts.length, 1, 'one 40 MiB part, which is what a provider would hand back at once');
+    const url = MDx.manifest.partUrl(manifest, 0);
+    await MDx.receive.streamPart(url, manifest.parts[0].s, (u8) => { windows++; biggest = Math.max(biggest, u8.byteLength); });
+    ok(windows >= 3, 'the part arrived in ' + windows + ' windows of at most ' + MDx.receive.CHUNK / MB + ' MiB');
+    eq(biggest, MDx.receive.CHUNK, 'and the biggest was exactly one window');
+    ok(biggest <= MDx.receive.CHUNK, 'the largest window was ' + biggest + ' bytes');
+  });
+
   report('integration');
   mock && mock.kill();
   process.exit(process.exitCode || 0);

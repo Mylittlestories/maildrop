@@ -9,6 +9,23 @@ Open `index.html`, drop the file, copy the link, mail it. The recipient opens
 the link, the page rebuilds the file in their browser, saves it, and tells them
 whether the bytes match what you sent.
 
+### Reading the page
+
+The Send tab is three numbered steps and that is all you see:
+
+| | |
+|---|---|
+| **1 · The file** | drop it, or click to browse. The sample button under it runs the whole pipeline with no network at all |
+| **2 · Where it will sit** | one dropdown. Its one line of text tells you the size limit and the deletion schedule; expiry, part size and the password are inside a folded line underneath |
+| **3 · Make the link** | the big button. Its label tells you what will happen, and the line under it says how many parts and when the host deletes them |
+
+While it runs, the form is replaced by progress — bytes, rate, time left, and a
+Stop button. When it finishes you get **one card**: the link, *Copy the link*,
+*Copy the whole message*, and below that a folded email draft if you want the text
+written for you. The Receive tab is one box: paste the link (or the whole email —
+it digs the link out) and press *Open it*. Settings is optional for everything
+except your own bucket.
+
 ```
 your browser ──split──▶ parts ──▶ a file host (litterbox.catbox.moe, or your own bucket)
       │                                                    │
@@ -38,7 +55,11 @@ your browser ──split──▶ parts ──▶ a file host (litterbox.catbox.
 | many files at once | refused on purpose — zip them, the manifest stays tiny |
 | optional password | off by default; when set, the host only ever sees ciphertext |
 
-**Send.** Pick a file, pick a provider, press *Start transfer*. The page reads the
+The Send tab is three numbered steps and nothing else until you need them: **1**
+the file, **2** where it will sit, **3** the button. Expiry, part size and the
+password sit in one folded line under step 2, and Settings is entirely optional.
+
+**Send.** Pick a file, pick a provider, press the button. The page reads the
 file in slices, uploads them in parallel with progress and retries, then shows the
 link, the length, and a pre-written email you can copy or hand to your mail client.
 
@@ -53,7 +74,15 @@ which mode it is in via the badges at the top. Then *Download & save file*.
 
 **Verify.** Every part is checked. A truncated, replaced or expired part is
 refused with a message that says which one and why — you never get a silently
-broken file.
+broken file. And if the link carries no fingerprints at all, the page says *nothing
+was checked* rather than smiling.
+
+**Memory.** Nothing bigger than one 16 MiB window is ever held: the sender folds
+digests as it reads, the receiver hashes, decrypts and writes in the same stream,
+and each encrypted record (`32 MiB + 16`) is fetched whole and dropped at once. A
+950 MiB part is 950 MiB of RAM in the naive design, which is how a big download
+kills a tab — so `npm run stress` pushes **5 GiB** through the actual page on a
+2 GB machine and fails if the file comes back changed.
 
 ---
 
@@ -80,6 +109,13 @@ https://you.github.io/maildrop/#AERHAIR767TG3P6B…
                                     └─ base32(UTF-8 JSON manifest), no padding
 ```
 
+Two fingerprints are in play. `parts[].h` is a folded digest (`SHA-256` of the
+`SHA-256`s of 16 MiB windows) of the bytes *as stored*, and `h` is either the same
+fold over the whole file or — above 8 GiB, where a second full read would make you
+wait — the digest of the part digests, marked `hm:"parts"`. Both ends recompute
+them from the same windows, which is what makes verification cheap enough to always
+run.
+
 The manifest is deliberately tiny and looks like this:
 
 ```json
@@ -98,8 +134,13 @@ The manifest is deliberately tiny and looks like this:
 * Base32 (`A–Z2–7`) because mail clients soft-wrap URLs and quote-printable
   encoders happily eat `-` and `=`. The receive box also accepts the whole email
   body and digs the link out of it (`MD.manifest.findManifest`).
-* Budget is 6200 characters of token. Above that the page tells you to raise the
-  per-part size instead of silently producing a link Outlook will break.
+* Budget is 6200 characters of token, and the length is **measured, not guessed**:
+  before the first byte leaves the machine the page encodes a trial manifest of the
+  shape this job would produce and counts the characters. If the user's part size
+  would blow the budget, the parts are grown until it does not (5 GiB at a 64 MiB
+  cap becomes 40 parts of 128 MiB) and the plan box says so. If not even the host's
+  own maximum can fit, the file is refused before anything is uploaded — a two-
+  minute upload ending in "the link is too long" is the worst possible failure.
 
 **Two GB in, one link out.** If a mail client or a spam filter refuses the long
 link, the link card has a folded *Backup* section with one short link per part —
@@ -122,6 +163,10 @@ Tick *Add a password* and the file is encrypted in the page before it leaves:
 * Per-part fingerprints are taken on the **ciphertext**, so the host cannot learn
   anything from them.
 * There is no recovery. A forgotten password means the file is gone.
+
+The threat model, the guards and the tests that pin them are written up in
+[docs/SECURITY.md](docs/SECURITY.md) — including why the URL in someone else's
+email is attacker input and what the fingerprints can and cannot prove.
 
 The default stays "no crypto, dead simple" because that is what this page is for:
 a public host plus no encryption means **anyone who gets the link can read the
@@ -164,6 +209,9 @@ npm run live           # node tools/live-check.mjs — pokes the real public hos
   third-party requests, script order, and every `<script src>` and doc link
   fetched from a real static server (`tools/serve.mjs`) to prove the deployed
   shape has nothing missing.
+* `tools/stress-5gb.mjs` — not part of `npm test` (it needs 10 GB of disk and a few
+  minutes): 5 GiB of dummy bytes through the real page, up and back, with the
+  result hashed independently. `--gb`, `--part` and `--password` are yours.
 
 The mock host is deliberately as strict about multipart framing as a real PHP
 endpoint, because a missing CRLF before the closing boundary once produced

@@ -116,7 +116,48 @@ let mock;
     ok(doc.getElementById('fileList').textContent.includes('clip.mov'), 'file row rendered');
     const plan = doc.getElementById('planBox').textContent;
     ok(/part/i.test(plan) && /3 MiB/.test(plan), 'plan mentions the size and parts: ' + plan.slice(0, 120));
-    ok(/below the recommended/.test(plan), 'the tiny 1 MB part size is called out');
+    ok(/below 16 MiB/.test(plan), 'the tiny 1 MB part size is called out: ' + plan.slice(plan.indexOf('part size below') - 20, plan.indexOf('part size below') + 90));
+  });
+
+  await test('a part size that cannot fit the link budget is grown before uploading', async () => {
+    const { w, doc } = await bootPage();
+    Object.assign(w.MD.app.state.cfg, { backend: 'litterbox', partCapBytes: '8MB', expiry: '72h', password: '' });
+    const info = w.MD.app.plan([{ name: 'disk.img', size: 5 * 1073741824 }]);
+    ok(info.cap > 8 * 1024 * 1024, 'the 8 MB cap was raised, not used: ' + info.cap);
+    eq(info.linkFits, true, 'the plan is sendable');
+    ok(info.linkChars > 0 && info.linkChars <= 6200, 'the link measures ' + info.linkChars + ' chars');
+    ok(info.count * info.cap >= 5 * 1073741824, 'the parts still cover the whole file');
+    w.MD.app.state.files = [{ name: 'disk.img', size: 5 * 1073741824 }];
+    w.UI.renderFiles();
+    const shown = doc.getElementById('planBox').textContent;
+    const m = /link ≈ (\d+) chars/.exec(shown);
+    ok(m, 'the plan box quotes a link length: ' + shown.slice(0, 140));
+    eq(Number(m[1]), info.linkChars, 'the plan box quotes the encoder\'s number, not a guess');
+    ok(!/would be|past what a mail client/.test(shown), 'no warning once the size was fixed: ' + shown.slice(0, 160));
+  });
+
+  await test('a file with no modification date is still listed, without an invented date', async () => {
+    const { dom, w, doc } = await bootPage();
+    w.MD.app.state.cfg.backend = 'local';
+    w.MD.app.state.files = [{ name: 'from-a-drop.png', size: 12345 }];
+    w.UI.renderFiles();
+    const row = doc.getElementById('fileList').textContent;
+    ok(row.includes('from-a-drop.png'), 'listed by name: ' + row.slice(0, 80));
+    ok(!/modified/.test(row), 'no bogus date was printed: ' + row.slice(0, 120));
+    eq(doc.getElementById('btnStart').disabled, false, 'and Start is still usable');
+    dom.window.close();
+  });
+
+  await test('a file too big for the link budget is refused before a byte is uploaded', async () => {
+    const { w, doc } = await bootPage();
+    Object.assign(w.MD.app.state.cfg, { backend: 'litterbox', partCapBytes: '8MB', expiry: '72h', password: '' });
+    const f = { name: 'vault.7z', size: 100 * 1073741824 };
+    const errs = w.MD.app.validateFiles([f]);
+    ok(errs.length > 0, 'refused up front: ' + JSON.stringify(errs));
+    ok(errs.join(' ').toLowerCase().includes('link'), 'the message names the link budget: ' + errs.join(' '));
+    w.MD.app.state.files = [f];
+    w.UI.renderFiles();
+    ok(/over|budget|past/.test(doc.getElementById('planBox').textContent), 'the plan box warns before Start: ' + doc.getElementById('planBox').textContent.slice(0, 200));
   });
 
   await test('multi-file selection is refused with instructions, not a crash', async () => {
@@ -307,7 +348,12 @@ let mock;
     w2.doc.getElementById('pasteBox').value = '#' + w.MD.manifest.encode(m);
     w2.doc.getElementById('btnDecode').dispatchEvent(new w2.w.MouseEvent('click', { bubbles: true }));
     await waitUntil(() => !w2.doc.getElementById('recvDirectRow').hidden, 20000, 'the fallback button');
-    ok(/fetch|network|refused|Failed|blocked/i.test(w2.doc.getElementById('recvMsg').textContent), 'error explained: ' + w2.doc.getElementById('recvMsg').textContent.slice(0, 80));
+    // the status line moves on as soon as the fallback button lands; the console
+    // pane is append-only, so that is where a failure has to be provable
+    const trail = w2.doc.getElementById('console').textContent;
+    const why = w2.doc.getElementById('recvMsg').textContent + '\n' + trail;
+    ok(/fetch|network|refused|Failed|blocked/i.test(why), 'error explained: ' + why.slice(-90));
+    ok(why.includes('127.0.0.1:9'), 'and it names the host that failed: ' + trail.slice(-170));
     eq(w2.doc.getElementById('btnRetry').hidden, false, 'and retry is offered');
     dom.window.close(); w2.dom.window.close();
   });
@@ -392,6 +438,55 @@ let mock;
     const persisted = JSON.parse(w.localStorage.getItem('maildrop.settings.v1'));
     eq(persisted.backend, 'selfhost', 'the provider choice is persisted too');
     eq(persisted.s3.secret, 'secret', 'the bucket key stays in this browser only (never sent anywhere)');
+  });
+
+  await test('a link cannot turn the “open it on the host” button into script', async () => {
+    const { dom, w, doc } = await bootPage();
+    w.UI.offerDirect('javascript:document.title=1', 'x');
+    eq(doc.getElementById('recvDirectRow').hidden, true, 'no button at all for a javascript: address');
+    w.UI.offerDirect('data:text/html,<script>alert(1)<\/script>');
+    eq(doc.getElementById('recvDirectRow').hidden, true, 'nor for a data: address');
+    w.UI.offerDirect('https://host.example/f/file.bin');
+    eq(doc.getElementById('recvDirectRow').hidden, false, 'a real host address is fine');
+    eq(doc.getElementById('recvDirect').getAttribute('href'), 'https://host.example/f/file.bin');
+    ok(/noopener/.test(doc.getElementById('recvDirect').getAttribute('rel')), 'and it does not leak the page to the host');
+    eq(doc.getElementById('recvDirect').getAttribute('referrerpolicy'), 'no-referrer');
+    // and a hostile manifest cannot even be decoded into one
+    let threw = '';
+    try {
+      w.MD.manifest.decode(w.MD.manifest.encode({
+        v: 1, n: 'x.bin', t: '', z: 5, p: 'litterbox', b: 'https://h/{id}', d: 0, o: '', e: null, h: '',
+        u: 'javascript:alert(1)', parts: [{ i: 'a.bin', s: 5, h: '' }]
+      }));
+    } catch (e) { threw = e.message; }
+    ok(/http\(s\)/.test(threw), 'decode-side guard too: ' + threw);
+    dom.window.close();
+  });
+
+  await test('a hostile file name is shown as text, never as markup', async () => {
+    const { dom, w, doc } = await bootPage();
+    const m = {
+      v: 1, n: '<img src=x onerror="window.__pwned=1">.bin', t: '', z: 1024 * 1024, p: 'mockhost',
+      b: BASE + 'f/{id}', d: 0, o: '', e: null, h: '', x: Date.now() - 60000,
+      parts: [{ i: 'nope.bin', s: 1024 * 1024, h: '' }]
+    };
+    w.UI.startReceive(m);
+    const nm = doc.getElementById('recvName');
+    eq(nm.querySelector('img'), null, 'no element was built from the name');
+    ok(/onerror/.test(nm.textContent), 'the odd characters are visible as text, which is honest');
+    eq(w.__pwned, undefined, 'and nothing ran');
+    ok(/expired/.test(doc.getElementById('recvMeta').textContent), 'a past deadline is stated plainly: ' + doc.getElementById('recvMeta').textContent);
+    dom.window.close();
+  });
+
+  await test('the page never runs anything that is not one of its own files', async () => {
+    const { dom, w, doc } = await bootPage();
+    const meta = doc.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    ok(meta, 'a CSP meta tag ships with the page');
+    ok(/script-src 'self'/.test(meta.getAttribute('content')), 'scripts: only same-origin: ' + meta.getAttribute('content'));
+    ok(!/unsafe-inline/.test(meta.getAttribute('content')), 'no inline-script hole');
+    eq(doc.querySelectorAll('#panel-send script, #panel-receive script').length, 0, 'no inline handlers or scripts in the markup');
+    dom.window.close();
   });
 
   await test('a corrupted part on the host is refused instead of saved silently', async () => {

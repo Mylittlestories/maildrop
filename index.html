@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MailDrop — send big files by email link, no account, no server</title>
 <meta name="description" content="Pack any file into an email-safe download link. Static page, no backend, no subscription, nothing to install. Files go from your browser straight to a temporary host; the link is what travels by email.">
@@ -52,8 +53,10 @@ section.on{display:block}
 label.f{display:block;font-size:12px;color:var(--dim);margin:0 0 5px;font-weight:600;letter-spacing:.2px;text-transform:uppercase}
 input,select,textarea{
   width:100%;background:#0a1120;color:var(--txt);border:1px solid var(--line);border-radius:10px;
-  padding:9px 11px;font:inherit;font-size:14px;outline:none
+  padding:10px 11px;font:inherit;font-size:14px;outline:none
 }
+select,button.btn{cursor:pointer}
+textarea{line-height:1.5}
 input:focus,select:focus,textarea:focus{border-color:#2f6d94;box-shadow:0 0 0 3px rgba(56,189,248,.12)}
 textarea{font-family:var(--mono);font-size:12.5px;min-height:84px;resize:vertical}
 input[type=checkbox]{width:auto}
@@ -65,7 +68,8 @@ button.btn{
 button.btn:hover{filter:brightness(1.07)}
 button.btn.ghost{background:#132038;color:var(--txt);box-shadow:none;border:1px solid var(--line)}
 button.btn.ok{background:linear-gradient(180deg,#34d399,#059669);color:#032118}
-button.btn.small{padding:7px 11px;font-size:13px;font-weight:600}
+button.btn.small{padding:9px 12px;font-size:13px;font-weight:600}
+button.btn{min-height:38px}
 button.btn[disabled]{opacity:.45;cursor:not-allowed;filter:grayscale(.3)}
 .bar{height:9px;border-radius:99px;background:#132038;overflow:hidden;border:1px solid var(--line)}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#818cf8);transition:width .2s}
@@ -92,6 +96,28 @@ h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;le
 footer{max-width:1080px;margin:26px auto 0;padding:0 20px;color:var(--dim2);font-size:12.5px;line-height:1.7}
 hr{border:none;border-top:1px solid var(--line);margin:16px 0}
 @media (max-width:620px){header{padding-top:14px}nav{margin-left:0;width:100%;justify-content:space-between}}
+
+.step{display:flex;gap:11px;align-items:flex-start;margin:0 0 10px}
+.step .no{flex:0 0 25px;height:25px;border-radius:50%;background:#16233a;border:1px solid #2f4468;color:var(--accent);font-weight:700;font-size:13px;display:grid;place-items:center}
+.step h2{margin:0;font-size:16px;line-height:1.35}
+.step .sub{margin:3px 0 0;color:var(--dim);font-size:13px}
+button.btn.big{display:block;width:100%;padding:14px 18px;font-size:16px;border-radius:12px;margin-top:2px}
+details.adv{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:#0a1120}
+details.adv>summary{cursor:pointer;padding:10px 13px;color:var(--dim);font-size:13px;font-weight:600;list-style:none}
+details.adv>summary::-webkit-details-marker{display:none}
+details.adv>summary::before{content:"\\25B8";display:inline-block;width:12px;color:var(--accent)}
+details.adv[open]>summary::before{content:"\\25BE"}
+details.adv>.advbody{padding:2px 13px 13px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.card>.card{margin-top:0}
+#banners{margin:0 0 12px;gap:8px}
+#banners .pill{background:#1b2942}
+#linkText{min-height:64px}
+.hint{font-size:13px;color:var(--dim)}
+.state{display:inline-flex;gap:7px;align-items:center;font-size:12.5px;color:var(--dim)}
+.state:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--dim2)}
+.state.on:before{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.state.bad:before{background:var(--bad)}
 </style>
 </head>
 <body>
@@ -105,122 +131,144 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
   </nav>
 </header>
 <main>
-<div id="context" class="row" style="margin:6px 0 14px"></div>
+<div id="banners" class="row"></div>
+<details class="adv" id="ctxWrap" style="margin:0 0 14px">
+  <summary id="ctxSum">Ready</summary>
+  <div class="advbody"><div id="context" class="row"></div>
+  <div class="mini" style="margin-top:8px">Read locally, never sent. The blue ticks are what this browser can do; a missing one only costs a feature.</div></div>
+</details>
 
 <section id="panel-send" class="on">
-  <div class="card">
+
+  <div class="card" id="sendSetup">
+    <div class="step"><span class="no">1</span><div class="grow">
+      <h2>The file</h2>
+      <p class="sub">Drop it in. Nothing leaves this computer until step 3, and the size does not matter.</p>
+    </div></div>
+
     <div class="drop" id="drop">
-      <b>Drop one file here</b>
-      <p>or click to browse · any size · nothing is uploaded until you press Start</p>
+      <b>Drop one file here, or click to browse</b>
+      <p>zip a folder first if you want to send several files as one</p>
       <input type="file" id="fileInput" hidden>
     </div>
     <div id="directBox" hidden>
       <label class="f" for="directUrl">The download URL you already have</label>
       <input id="directUrl" placeholder="https://some-host.com/files/clip.mov" autocomplete="off" spellcheck="false">
-      <div class="mini" style="margin-top:8px">Nothing is uploaded from this page. MailDrop turns the URL into a tidy email, and — if the host allows cross-origin reads — rebuilds and verifies the file in the receive page. If it does not, the page just hands the link to the recipient.</div>
+      <div class="mini" style="margin-top:8px">Nothing is uploaded here. MailDrop writes the email around your URL, and if the host allows cross-origin reads the receive page rebuilds and checks the file — if not, it hands your recipient the link.</div>
     </div>
-    <div id="fileWrap">
-      <div id="fileList"></div>
-    </div>
+    <div id="fileWrap"><div id="fileList"></div></div>
     <div id="planBox"></div>
-
-    <div class="row" style="margin-top:14px">
-      <div class="grow">
-        <label class="f" for="backendSel">Where the file sits</label>
-        <select id="backendSel"></select>
-      </div>
-      <div class="grow">
-        <label class="f" for="expirySel">Expires after</label>
-        <select id="expirySel"></select>
-      </div>
-      <div class="grow">
-        <label class="f" for="capInput">Max size per part</label>
-        <input id="capInput" placeholder="auto (provider cap)" autocomplete="off">
-      </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn small ghost" id="btnDemo">or try it with a 4 MB sample</button>
+      <span class="hint">the sample never touches the network</span>
     </div>
 
-    <div class="row" style="margin-top:12px">
-      <div class="grow" id="pwWrap">
-        <label class="f" for="pwInput">Password (optional)</label>
-        <input id="pwInput" type="text" placeholder="leave empty = no encryption" autocomplete="off" spellcheck="false">
+    <hr>
+    <div class="step"><span class="no">2</span><div class="grow">
+      <h2>Where the file will sit</h2>
+      <div class="row">
+        <div class="grow"><label class="f" for="backendSel">Provider</label><select id="backendSel"></select></div>
       </div>
-      <div style="align-self:flex-end">
-        <label class="mini" style="text-transform:none;font-weight:500;display:flex;gap:7px;align-items:center;padding-bottom:9px">
-          <input type="checkbox" id="includeToken"> include the raw code in the email text
-        </label>
-      </div>
-    </div>
+      <div class="mini" id="backendBlurb" style="margin-top:8px"></div>
 
-    <div class="row" style="margin-top:16px">
-      <button class="btn" id="btnStart" disabled>Start transfer</button>
-      <button class="btn ghost" id="btnCancel" hidden>Cancel</button>
-      <button class="btn ghost" id="btnDemo">Try it with a 4 MB sample file</button>
-      <span class="mini" id="sendHint"></span>
+      <details class="adv" id="advSend">
+        <summary>Expiry, part size, password</summary>
+        <div class="advbody">
+          <div class="grid">
+            <div><label class="f" for="expirySel">Deleted by the host after</label><select id="expirySel"></select></div>
+            <div><label class="f" for="capInput">Max size per part</label><input id="capInput" placeholder="auto (provider cap)" autocomplete="off"></div>
+            <div id="pwWrap"><label class="f" for="pwInput">Password — optional</label><input id="pwInput" type="text" placeholder="leave empty for none" autocomplete="off" spellcheck="false"></div>
+          </div>
+          <label class="mini" style="text-transform:none;font-weight:500;display:flex;gap:7px;align-items:center;margin-top:10px">
+            <input type="checkbox" id="includeToken"> also put the raw code in the email (only useful if a mail client mangles the link)
+          </label>
+          <div class="note" style="margin-bottom:0">A password encrypts the file in this browser before it is sent, so the host only ever holds ciphertext — and there is no recovery. Leave it empty for everyday files.</div>
+        </div>
+      </details>
+    </div></div>
+
+    <hr>
+    <div class="step"><span class="no">3</span><div class="grow">
+      <h2>Make the link</h2>
+    </div></div>
+    <button class="btn big" id="btnStart" disabled>Choose a file first</button>
+    <div class="row" style="margin-top:9px">
+      <button class="btn ghost small" id="btnCancel" hidden>Cancel and start over</button>
+      <span class="hint" id="sendHint" aria-live="polite"></span>
     </div>
   </div>
 
   <div class="card" id="progressCard" hidden style="margin-top:14px">
-    <div class="row"><h2 style="margin:0">Progress</h2><span class="pill" id="progPill">working</span></div>
+    <div class="row"><h2 style="margin:0">Sending</h2><span class="pill" id="progPill">working</span></div>
     <div class="bar" style="margin-top:10px"><i id="progBar"></i></div>
-    <div class="mini" id="progMsg" style="margin-top:8px">…</div>
+    <div class="mini" id="progMsg" style="margin-top:8px" aria-live="polite">…</div>
+    <div class="row" style="margin-top:10px"><button class="btn ghost small" id="btnCancelRun2" hidden>Stop</button></div>
   </div>
 
   <div class="card" id="linkCard" hidden style="margin-top:14px">
     <div class="row">
-      <h2 style="margin:0">Your download link</h2>
+      <h2 style="margin:0">Done — this is what you send</h2>
       <span class="pill ok" id="linkStats"></span>
     </div>
     <textarea id="linkText" readonly></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="btnCopyLink">Copy the link</button>
+      <button class="btn ghost" id="btnCopyMail">Copy the whole message</button>
+      <button class="btn small ghost" id="btnCopyCode">Code only</button>
+      <button class="btn small ghost" id="btnOpenLink">Preview what they see</button>
+      <button class="btn small ghost" id="btnShare" hidden>Share…</button>
+    </div>
+    <div class="note" id="linkNote"></div>
+
+    <details class="adv">
+      <summary>Email draft — the text behind “Copy the whole message”</summary>
+      <div class="advbody">
+        <div class="row">
+          <div class="grow"><label class="f" for="toInput">To</label><input id="toInput" placeholder="name@example.com" autocomplete="off"></div>
+          <div class="grow"><label class="f" for="subjInput">Subject</label><input id="subjInput" autocomplete="off"></div>
+        </div>
+        <textarea id="bodyText" style="min-height:190px;margin-top:10px"></textarea>
+        <div class="row" style="margin-top:10px">
+          <button class="btn ok small" id="btnMailto">Open in my mail app</button>
+          <button class="btn small ghost" id="btnCopyFile">Save the message to a .txt</button>
+          <span class="hint">the draft is written here only — nothing is sent from this page</span>
+        </div>
+      </div>
+    </details>
+
     <details class="note" id="linkBackup" hidden style="margin-top:12px">
       <summary>Backup: one short link per part</summary>
       <div class="mini" style="margin:8px 0">If a mail client or filter rejects the long link, send these instead — the receive page merges them back into one job.</div>
       <div id="linkBackupList"></div>
     </details>
-    <div class="row" style="margin-top:10px">
-      <button class="btn small" id="btnCopyLink">Copy link</button>
-      <button class="btn small ghost" id="btnCopyCode">Copy code only</button>
-      <button class="btn small ghost" id="btnOpenLink">Preview the page a recipient sees</button>
-      <button class="btn small ghost" id="btnShare" hidden>Share…</button>
-    </div>
-
-    <h3>Email draft</h3>
-    <div class="row">
-      <div class="grow"><label class="f" for="toInput">To</label><input id="toInput" placeholder="name@example.com" autocomplete="off"></div>
-      <div class="grow"><label class="f" for="subjInput">Subject</label><input id="subjInput" autocomplete="off"></div>
-    </div>
-    <textarea id="bodyText" style="min-height:190px"></textarea>
-    <div class="row" style="margin-top:10px">
-      <button class="btn ok" id="btnMailto">Open in my mail app</button>
-      <button class="btn small ghost" id="btnCopyMail">Copy the whole message</button>
-      <button class="btn small ghost" id="btnCopyFile">Copy link + message to a file</button>
-    </div>
-    <div class="note" id="linkNote"></div>
   </div>
 
   <div class="card" style="margin-top:14px">
-    <div class="row"><h2 style="margin:0">Recent transfers on this device</h2><button class="btn small ghost" id="btnClearHist">Clear</button></div>
+    <div class="row"><h2 style="margin:0">Sent from this browser</h2><button class="btn small ghost" id="btnClearHist">Clear</button></div>
     <div id="histList" class="mini">nothing yet</div>
-    <div class="row" style="margin-top:12px">
-      <button class="btn small ghost" id="btnConsole">Debug log</button>
-    </div>
+    <div class="row" style="margin-top:12px"><button class="btn small ghost" id="btnConsole">Debug log</button></div>
     <pre id="console"></pre>
   </div>
 </section>
 
 <section id="panel-receive">
   <div class="card">
-    <h2>Receive a file</h2>
-    <div class="row">
-      <div class="grow">
-        <label class="f" for="pasteBox">Paste the link — or the whole email, no need to trim it</label>
-        <textarea id="pasteBox" placeholder="https://…/#ab2cd3ef…   (or paste the entire message)"></textarea>
-      </div>
-    </div>
+    <div class="step"><span class="no">1</span><div class="grow">
+      <h2>Paste the link the sender gave you</h2>
+      <p class="sub">Or just open the link — it starts on its own. Pasting the whole email works too; the page finds the part that matters.</p>
+    </div></div>
+    <textarea id="pasteBox" placeholder="https://…/#ab2cd3ef…   (or paste the entire message)"></textarea>
     <div class="row" style="margin-top:10px">
-      <button class="btn" id="btnDecode">Open</button>
-      <button class="btn small ghost" id="btnAddPart">Add another link from another email</button>
-      <span class="mini">Or just open the link — this page reads the part after the <span class="mono">#</span> and starts on its own.</span>
+      <button class="btn" id="btnDecode">Open it</button>
+      <span class="hint">nothing you paste is stored or sent anywhere</span>
     </div>
+    <details class="adv">
+      <summary>The sender sent me more than one link</summary>
+      <div class="advbody">
+        <div class="mini">Big transfers are sometimes split across emails so no single link is too long. Paste the next one here and add it — the page keeps them together and downloads once you have them all.</div>
+        <div class="row" style="margin-top:10px"><button class="btn small ghost" id="btnAddPart">Add this link to the job</button></div>
+      </div>
+    </details>
   </div>
 
   <div class="card" id="recvCard" hidden style="margin-top:14px">
@@ -228,17 +276,17 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
     <div id="recvMeta" class="mini"></div>
     <div id="recvParts" style="margin-top:12px"></div>
     <div id="recvPwBox" hidden style="margin-top:12px">
-      <label class="f" for="recvPw">Password (the sender sends it separately)</label>
-      <div class="row"><input id="recvPw" class="grow" type="text" autocomplete="off"><button class="btn small ghost" id="btnApplyPw">Apply</button></div>
+      <label class="f" for="recvPw">Password — the sender should have sent it separately</label>
+      <div class="row"><input id="recvPw" class="grow" type="text" autocomplete="off"><button class="btn small ghost" id="btnApplyPw">Unlock</button></div>
     </div>
     <div class="bar" style="margin-top:14px"><i id="recvBar"></i></div>
-    <div class="mini" id="recvMsg" style="margin-top:8px">—</div>
+    <div class="mini" id="recvMsg" style="margin-top:8px" aria-live="polite">—</div>
     <div class="row" style="margin-top:14px">
       <button class="btn ok" id="btnDownload" disabled>Download &amp; save file</button>
-      <button class="btn small ghost" id="btnRetry" hidden>Retry download</button>
+      <button class="btn small ghost" id="btnRetry" hidden>Try the download again</button>
     </div>
     <div class="row" style="margin-top:10px" id="recvDirectRow" hidden>
-      <a class="btn ok" id="recvDirect" target="_blank" rel="noopener" style="text-decoration:none">Open it on the host</a>
+      <a class="btn ok" id="recvDirect" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" style="text-decoration:none">Open it on the host</a>
       <span class="mini" id="recvDirectHint"></span>
     </div>
     <div class="note" id="recvNote"></div>
@@ -248,20 +296,19 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
 <section id="panel-settings">
   <div class="card">
     <h2>Settings</h2>
-    <div class="note">Saved in this browser only (localStorage). Nothing is sent anywhere, and no account is involved.</div>
+    <div class="note">You can ignore this page completely — the defaults on the Send tab work as they are. Everything here is saved in this browser only and sent nowhere.</div>
 
-    <h3>Delivery</h3>
+    <h3>Defaults for the Send tab</h3>
     <div class="grid">
       <div><label class="f" for="sBackend">Provider</label><select id="sBackend"></select></div>
       <div><label class="f" for="sExpiry">Default expiry</label><select id="sExpiry"></select></div>
       <div><label class="f" for="sCap">Max part size (e.g. 900MB)</label><input id="sCap" autocomplete="off"></div>
       <div><label class="f" for="sReceiveBase">Receive page URL (where you host this repo)</label><input id="sReceiveBase" placeholder="https://you.github.io/maildrop/" autocomplete="off"></div>
     </div>
-    <div id="backendBlurb" class="mini" style="margin-top:10px"></div>
 
-    <h3>Your own bucket (only way past ~1 GB per part)</h3>
-    <div class="note">Any S3-compatible bucket: Backblaze B2 (10 GB free), Cloudflare R2 (10 GB free, no egress fees), Wasabi, MinIO… The browser signs the request itself and PUTs straight to the bucket — no proxy, no code to run. You must tick <span class="mono">CORS → allow PUT</span> on the bucket once (<a href="docs/SETUP-BUCKET.md">five-minute setup</a>).</div>
-    <div class="grid">
+    <details class="adv" id="s3Box">
+      <summary>Your own bucket (needed for files over 20 GB, or to keep them off a public host)</summary>
+      <div class="advbody">
       <div><label class="f" for="sEp">Endpoint URL</label><input id="sEp" placeholder="https://s3.us-west-004.backblazeb2.com" autocomplete="off"></div>
       <div><label class="f" for="sBk">Bucket</label><input id="sBk" autocomplete="off"></div>
       <div><label class="f" for="sRg">Region</label><input id="sRg" placeholder="auto" autocomplete="off"></div>
@@ -278,9 +325,14 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
     </div>
     <pre id="s3out" class="box" hidden></pre>
 
-    <h3>Danger zone</h3>
+            <div class="mini" style="margin-top:10px">The secret key never leaves this browser: it signs requests from here straight to your bucket. <a href="docs/SETUP-BUCKET.md">Five-minute setup</a>.</div>
+      </div>
+    </details>
+
+    <h3>Starting over</h3>
     <div class="row">
       <button class="btn small ghost" id="btnWipe">Forget settings, history and test-mode data</button>
+      <span class="hint">this also forgets a bucket key typed on this machine</span>
     </div>
   </div>
 </section>
@@ -291,7 +343,7 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
   Recipients click once, save, done.
   <br>Free public hosts rate-limit and cap sizes; expect ~1 GB per part. For daily use, wire up a bucket and the cap becomes the bucket's.
   <br>Everything here is static files: <span class="mono">index.html</span> + <span class="mono">lib/*.js</span>. Push to a GitHub repo, enable Pages, done — <a href="docs/DEPLOY-GITHUB.md">deploy guide</a>,
-  <a href="docs/PRIVACY.md">what happens to your bytes</a>, <a href="docs/PROVIDERS.md">why these providers</a>, <a href="README.md">README</a>.
+  <a href="docs/PRIVACY.md">what happens to your bytes</a>, <a href="docs/SECURITY.md">the guards and the threat model</a>, <a href="docs/PROVIDERS.md">why these providers</a>, <a href="README.md">README</a>.
 </footer>
 
 <script src="lib/util.js"></script>

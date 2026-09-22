@@ -12,7 +12,8 @@
     "test:integration": "node tests/integration.test.js",
     "test:browser": "node tests/browser.test.js",
     "test:page": "node tests/page.test.js",
-    "live": "node tools/live-check.mjs"
+    "live": "node tools/live-check.mjs",
+    "stress": "node tools/stress-5gb.mjs"
   },
   "devDependencies": {
     "jsdom": "*"

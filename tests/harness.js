@@ -95,6 +95,9 @@ function startTool(root, script, marker) {
       if (m) { clearTimeout(to); res(Number(m[1])); }
     });
     srv.on('exit', (c) => rej(new Error(script + ' exited early: ' + c + ' ' + out)));
+  // A test file that dies on an uncaught exception never reaches its mock.kill(),
+  // and an orphaned host holds hundreds of megabytes against the next run.
+  process.once('exit', () => { try { srv.kill('SIGKILL'); } catch (e) { } });
   });
   return portReady.then(async (port) => {
     const base = 'http://127.0.0.1:' + port + '/';

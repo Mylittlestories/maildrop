@@ -88,6 +88,67 @@ function randFile(size, name) {
     eq(MD.backends.selfhostConfigured(cfg), true);
   });
 
+  section('the guard — nothing from someone else\u2019s link is trusted');
+
+  await test('a manifest cannot name a scheme this page should touch', () => {
+    const base = { v: 1, n: 'x.bin', t: '', z: 5, p: 'litterbox', d: 0, o: '', e: null, h: '', parts: [{ i: 'a.bin', s: 5, h: '' }] };
+    for (const bad of ['javascript:alert(1)', 'data:text/html,<h1>hi', 'file:///etc/passwd', 'javascript:alert(1)//', '  https://ok/x  javascript:']) {
+      throwsAsync(() => Promise.resolve().then(() => MD.manifest.encode(Object.assign({}, base, { b: bad + '/{id}' }))), /http\(s\)/, 'base ' + JSON.stringify(bad));
+      throwsAsync(() => Promise.resolve().then(() => MD.manifest.encode(Object.assign({}, base, { u: bad }))), /http\(s\)/, 'direct link ' + JSON.stringify(bad));
+    }
+    ok(MD.manifest.decode(MD.manifest.encode(Object.assign({}, base, { b: 'https://h.example/{id}', u: 'https://h.example/a.bin' }))), 'a plain https manifest still works');
+  });
+
+  await test('a part id cannot climb out of the sender\u2019s prefix or smuggle a query', () => {
+    const base = { v: 1, n: 'x.bin', t: '', z: 5, p: 'litterbox', b: 'https://h.example/drop/{id}', d: 0, o: '', e: null, h: '', parts: [] };
+    for (const bad of ['../../other-bucket/secret', 'a?id=1', 'a#f', 'a b', 'a\nb', '..\\..\\x']) {
+      throwsAsync(() => Promise.resolve().then(() => MD.manifest.encode(Object.assign({}, base, { parts: [{ i: bad, s: 5, h: '' }] }))), /does not look like a file name|will not fetch/, 'id ' + JSON.stringify(bad));
+    }
+    eq(MD.manifest.encode(Object.assign({}, base, { parts: [{ i: 'drop-9f2a.bin', s: 5, h: '' }] })).length > 0, true, 'an ordinary id passes');
+  });
+
+  await test('a file name from a link cannot carry markup into the page', () => {
+    eq(MD.util.cleanName('<img src=x onerror=alert(1)>.png'), '_img src=x onerror=alert(1)_.png');
+    eq(MD.util.cleanName('a\u0007b.txt'), 'ab.txt');
+    eq(MD.util.cleanName('../../etc/passwd'), '.._.._etc_passwd');
+    eq(MD.util.cleanName(''), 'file');
+  });
+
+  await test('safeUrl only ever lets an http(s) address through', () => {
+    eq(MD.util.safeUrl('https://a.b/c'), 'https://a.b/c');
+    eq(MD.util.safeUrl('http://127.0.0.1:8099/f/x'), 'http://127.0.0.1:8099/f/x');
+    eq(MD.util.safeUrl('javascript:alert(1)'), '');
+    eq(MD.util.safeUrl('https://a.b/c?next=javascript:alert(1)'), 'https://a.b/c?next=javascript:alert(1)');
+    eq(MD.util.safeUrl('https://a.b/c\nX'), '');
+    eq(MD.util.safeUrl('local://part-1'), '', 'local:// needs to be asked for');
+    eq(MD.util.safeUrl('local://part-1', true), 'local://part-1');
+  });
+
+  await test('the To: field cannot add recipients or headers', () => {
+    const good = MD.email.safeAddress('georgederve@gmail.com, second@x.co.uk');
+    eq(good.to, 'georgederve@gmail.com,second@x.co.uk');
+    eq(good.dropped.length, 0);
+    const evil = MD.email.safeAddress('a@b.co?cc=victim@evil.com');
+    eq(evil.to, '', 'a query in the address is not an address');
+    const mixed = MD.email.safeAddress('a@b.co x@y#z');
+    eq(mixed.to, 'a@b.co');
+    eq(mixed.dropped.join(''), 'x@y#z');
+    const url = MD.email.mailtoUrl('a@b.co?subject=hi&body=hacked', 's', 'b');
+    eq(url.startsWith('mailto:?'), true, 'nothing usable survives: ' + url.slice(0, 30));
+    ok(!url.includes('hacked'), 'the smuggled body text never enters the URL');
+  });
+
+  await test('hm and the deadline travel with the manifest', () => {
+    const m = { v: 1, n: 'x.bin', t: '', z: 5, p: 'litterbox', b: 'https://h.example/{id}', d: 3600000, x: 1700000000000, o: '', e: null, h: 'aa'.repeat(32), hm: 'parts', parts: [{ i: 'a.bin', s: 5, h: '' }] };
+    const back = MD.manifest.decode(MD.manifest.encode(m));
+    eq(back.hm, 'parts');
+    eq(back.x, 1700000000000);
+    const plain = MD.manifest.decode(MD.manifest.encode(Object.assign({}, m, { hm: 'file', x: 0 })));
+    eq(plain.hm, 'file', 'the default costs no characters');
+    eq(plain.x, 0);
+    eq(MD.manifest.encode(m).length > MD.manifest.encode(Object.assign({}, m, { hm: 'file', x: 0 })).length, true, 'and the extras do cost a few');
+  });
+
   await test('lib/config.js pre-fills settings, and this browser still wins', () => {
     const ctx2 = makeSandbox({ MD: { config: {
       backend: 'selfhost', partCapBytes: '64MB',
@@ -131,8 +192,8 @@ function randFile(size, name) {
     eq(merged.parts[1].i, 'bbb.bin');
   });
   await test('merge refuses links that describe different files', async () => {
-    const a = { v: 1, n: 'a.bin', t: '', z: 10, p: 'litterbox', b: 'x/{id}', d: 0, o: '', e: null, h: '', parts: [{ i: '1', s: 10, h: '' }] };
-    const b = { v: 1, n: 'b.bin', t: '', z: 10, p: 'litterbox', b: 'x/{id}', d: 0, o: '', e: null, h: '', parts: [{ i: '2', s: 10, h: '' }] };
+    const a = { v: 1, n: 'a.bin', t: '', z: 10, p: 'litterbox', b: 'https://h.example/{id}', d: 0, o: '', e: null, h: '', parts: [{ i: '1', s: 10, h: '' }] };
+    const b = { v: 1, n: 'b.bin', t: '', z: 10, p: 'litterbox', b: 'https://h.example/{id}', d: 0, o: '', e: null, h: '', parts: [{ i: '2', s: 10, h: '' }] };
     await throwsAsync(async () => MD.manifest.merge(a, b), /different file names/);
   });
   await test('garbage in the paste box says so instead of half-working', async () => {
@@ -272,7 +333,7 @@ function randFile(size, name) {
 
   section('email — the copy the recipient sees');
   await test('subject and body carry size, parts, expiry and link', () => {
-    const m = { v: 1, n: 'master.mov', t: '', z: 2 * 1024 * 1024 * 1024, p: 'litterbox', b: 'x/{id}', d: 259200000, o: '', e: null, h: 'abcdef1234567890', parts: [{ i: '1', s: 1, h: '' }, { i: '2', s: 1, h: '' }] };
+    const m = { v: 1, n: 'master.mov', t: '', z: 2 * 1024 * 1024 * 1024, p: 'litterbox', b: 'https://h.example/{id}', d: 259200000, o: '', e: null, h: 'abcdef1234567890', parts: [{ i: '1', s: 1, h: '' }, { i: '2', s: 1, h: '' }] };
     const s = MD.email.subjectFor(m, {});
     ok(s.includes('master.mov') && s.includes('GiB'), s);
     const b = MD.email.bodyFor(m, 'https://y.github.io/maildrop/#TOKEN', { includeToken: true });
@@ -296,7 +357,7 @@ function randFile(size, name) {
     ok(decodeURIComponent(url).includes('Message shortened'), 'honest truncation note');
   });
   await test('extract() takes a link, a raw token or a whole email', () => {
-    const m = { v: 1, n: 'q.bin', t: '', z: 5, p: 'litterbox', b: 'x/{id}', d: 0, o: '', e: null, h: '', parts: [{ i: 'q.bin', s: 5, h: '' }] };
+    const m = { v: 1, n: 'q.bin', t: '', z: 5, p: 'litterbox', b: 'https://h.example/{id}', d: 0, o: '', e: null, h: '', parts: [{ i: 'q.bin', s: 5, h: '' }] };
     const tok = MD.manifest.encode(m);
     for (const text of ['https://p/#' + tok, tok, 'Hey!\n\nhttps://p/#' + tok + '\n\nbye']) {
       eq(MD.manifest.findManifest(text).n, 'q.bin');
