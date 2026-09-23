@@ -25,6 +25,7 @@ const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : n
 const corsOnly = argv.includes('--cors-only');
 const sizeMB = Number(argv.find((a) => /^[0-9.]+$/.test(a)) || 3);
 const backendKey = flag('--backend') || 'litterbox';
+const baseOverride = flag('--base');          // point a host with a mutable base (mockhost) somewhere else
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
 const ORIGIN = 'https://pages.example.invalid';
 
@@ -109,6 +110,12 @@ console.log('\nMailDrop live check · ' + sizeMB + ' MiB of random bytes · prov
 const backend = MD.backends.get(backendKey);
 if (!backend) { console.log('no such provider: ' + backendKey); process.exit(2); }
 
+if (baseOverride) {
+  if (backend.base === undefined) { console.log(backend.key + ' has no adjustable base URL'); process.exit(2); }
+  backend.base = /\/$/.test(baseOverride) ? baseOverride : baseOverride + '/';
+  step('target   ' + backend.base + '  (offline mock host, no internet involved)');
+}
+
 if (backend.key === 'litterbox') {
   step('1    OPTIONS on the upload endpoint');
   try {
@@ -116,7 +123,12 @@ if (backend.key === 'litterbox') {
       method: 'OPTIONS', headers: { Origin: ORIGIN, 'Access-Control-Request-Method': 'POST', 'User-Agent': UA }
     });
     step('     HTTP ' + o.status + ' · ACAO ' + hdr(o, 'access-control-allow-origin') + ' · allow-methods ' + hdr(o, 'access-control-allow-methods'));
-    if (o.status >= 400) bad('the endpoint rejected the preflight (' + o.status + ') — but a multipart POST is a *simple* request, so uploads may still work');
+    // A refused preflight is not a verdict on this page: a multipart POST with no
+    // custom headers is a *simple* request and is never preflighted, so the only
+    // thing that answers the question is the upload two lines below. Note it; do not
+    // fail on it, or the tool cries wolf on every host that does not implement OPTIONS
+    // (405 here, and the transfer works).
+    if (o.status >= 400) step('     ! preflight answered ' + o.status + ' — irrelevant to us: a plain multipart POST is not preflighted');
   } catch (e) { bad('OPTIONS failed: ' + e.message); }
 }
 
@@ -146,7 +158,9 @@ if (!corsOnly) {
     good('1  stored → ' + stored);
   } catch (e) {
     bad('upload: ' + (e.message || e));
-    step('   (a 403 here usually means the host is refusing this IP or user agent, not that the page is broken — the same request from a home connection may pass)');
+    step('   (403: the host is refusing this IP or user agent, and the same request from a home');
+    step('    connection may pass. 412 with a body like "No file!" is different: the bytes');
+    step('    arrived and the field carrying them was not named what the endpoint looks for.)');
   }
 } else {
   step('1    skipped the upload (--cors-only)');
@@ -158,8 +172,10 @@ if (stored) {
   try {
     const expect = MD.backends.wantsForm(backend) ? file.size : storedBodySize;
     const got = await MD.receive.fetchPart(stored, expect, () => { });
-    if (Buffer.from(got).toString('hex') === digest) good('bytes identical, ' + got.byteLength + ' bytes, hash matches');
-    else bad('MISMATCH: got ' + got.byteLength + ' bytes where ' + expect + ' were promised');
+    const gotSha = crypto.createHash('sha256').update(got).digest('hex');
+    if (got.byteLength === expect && gotSha === digest) good('bytes identical, ' + got.byteLength + ' bytes, sha256 ' + gotSha.slice(0, 16) + '\u2026');
+    else bad('MISMATCH: ' + got.byteLength + ' bytes back with sha ' + gotSha.slice(0, 16) + '\u2026 where ' + expect + ' bytes with sha ' + digest.slice(0, 16) + '\u2026 went in' +
+      (got.byteLength === expect ? ' — same length, so the host kept something else' : ' — the host kept a different amount'));
   } catch (e) { bad('re-download: ' + (e.message || e)); }
 }
 

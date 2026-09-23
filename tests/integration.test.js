@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const path = require('path');
 const { makeSandbox, loadLib, test, eq, ok, throwsAsync, section, report, startMock } = require('./harness.js');
 const { makeXhr } = require('./xhr-shim.js');
+const cp = require('child_process');
 
 let PORT = 0, BASE = '';
 
@@ -236,7 +237,8 @@ let mock;
     const head = Buffer.from(await body.slice(0, 400).arrayBuffer()).toString('latin1');
     ok(/name="reqtype"\r\n\r\nfileupload/.test(head), 'reqtype inside the body: ' + head.slice(0, 120));
     ok(/name="time"\r\n\r\n24h/.test(head), 'expiry inside the body');
-    ok(/filename="a\.bin"/.test(head), 'file part named');
+    ok(/name="fileToUpload"; filename="a\.bin"/.test(head), 'the file part carries the field name this endpoint searches for');
+    eq(/name="file"/.test(head), false, 'and no part carries any other name — "file" is what shipped, and it earns a 412 "No file!"');
     // raw-object backends must NOT get a multipart wrapper
     const raw = MDx.backends.partBody(MDx.backends.get('selfhost'), file.slice(0, 4096), fields, 'a.bin');
     eq(raw.size, 4096, 'bucket PUT is the payload only');
@@ -602,6 +604,74 @@ let mock;
       eq(r.ok, true, key + ' cannot fail a network check');
       ok(/Nothing to check/.test(r.lines.join(' ')), key + ' says why');
     }
+  });
+
+  await test('a host that reads the file by field name accepts the body we send', async () => {
+    // Why this exists: litterbox answers 412 "No file!" for a body whose payload sits
+    // under any name but fileToUpload, after taking every byte of the upload — so an
+    // assertion that "there is a file part" passes while every real transfer fails.
+    // This server is deliberately strict, and the test proves it is by also sending it
+    // the body the page used to send.
+    let stored = null;
+    const srv = await new Promise(function (resolve) {
+      const s = http.createServer(function (req, res) {
+        const chunks = [];
+        req.on('data', function (c) { chunks.push(c); });
+        req.on('end', function () {
+          const body = Buffer.concat(chunks).toString('latin1');
+          const m = /name="fileToUpload"; filename="([^"]*)"\r\nContent-Type: [^\r]*\r\n\r\n([\s\S]*?)\r\n--/.exec(body);
+          const okForm = m && /name="reqtype"\r\n\r\nfileupload/.test(body) && /name="time"\r\n\r\n(1h|12h|24h|72h)\r\n/.test(body);
+          if (!okForm) {
+            res.writeHead(412, { 'content-type': 'text/plain', 'access-control-allow-origin': '*' });
+            res.end('No file!');
+            return;
+          }
+          stored = Buffer.from(m[2], 'latin1');
+          res.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*' });
+          res.end('https://litter.catbox.moe/strict-part.bin');
+        });
+      });
+      s.listen(0, '127.0.0.1', function () { resolve(s); });
+    });
+    const sb = freshSandbox();
+    const MDx = sb.MD;
+    MDx.config = Object.assign({}, MDx.config, { litterUploadUrl: 'http://127.0.0.1:' + srv.address().port + '/' });
+    const lb = MDx.backends.get('litterbox');
+    const payload = crypto.randomBytes(4096);
+    const blob = new sb.Blob([payload], { type: 'application/octet-stream' });
+    try {
+      const good = MDx.backends.partBody(lb, blob, lb.fieldsFor('24h'), 'a.bin', 'application/octet-stream');
+      const r = await lb.upload(good, {});
+      eq(r.id, 'strict-part.bin', 'the host took the part and answered with its URL');
+      eq(stored.length, payload.length, 'every byte arrived, none lost to the boundary');
+      eq(Buffer.compare(stored, payload), 0, 'and they are the bytes we sent');
+
+      const wrong = MDx.pack.multipartFromBlob(lb.fieldsFor('24h'), blob, 'a.bin', 'application/octet-stream', 'file');
+      let status = 0;
+      try { await lb.upload(wrong, {}); status = 200; } catch (e) { status = e.httpStatus || 0; }
+      eq(status, 412, 'the strict server does refuse the name the page used to send, so the check above is not free');
+      eq(lb.fileField, 'fileToUpload', 'and the backend names the field the host looks for');
+    } finally { srv.close(); }
+  });
+
+  await test('the live-check tool calls a healthy round trip healthy, offline', async () => {
+    // The tool that answers "is the provider working" was itself broken for weeks: it
+    // compared a 6 MB hex dump of the downloaded bytes against a 64-character hash, so
+    // every successful transfer printed MISMATCH and every failed one printed an HTTP
+    // status — which is precisely how a wrong field name in our own multipart body came
+    // to be read as "the host is refusing us". A checker needs a check, and it needs one
+    // that runs without the internet, so it runs here against the local mock host.
+    const r = await new Promise(function (resolve) {
+      cp.execFile(process.execPath, [path.join(__dirname, '..', 'tools', 'live-check.mjs'), '1',
+        '--backend', 'mockhost', '--base', BASE], { cwd: path.join(__dirname, '..'), timeout: 120000 },
+      function (err, stdout, stderr) {
+        resolve({ code: err ? Number(err.code || 1) : 0, out: String(stdout) + String(stderr) });
+      });
+    });
+    ok(/bytes identical/.test(r.out), 'step 4 recognises a good transfer: ' + r.out.split('\n').filter(function (l) { return /bytes|MISMATCH/.test(l); }).join(' ').trim().slice(0, 140));
+    ok(/cross-origin read allowed/.test(r.out), 'and step 3 still notices range support');
+    eq(r.code, 0, 'the tool exits 0 on a pass: ' + r.out.trim().split('\n').slice(-2).join(' '));
+    eq(/MISMATCH|✗/.test(r.out), false, 'nothing in the output is a failure');
   });
 
   report('integration');
