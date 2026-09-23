@@ -6,6 +6,16 @@ const path = require('path');
 const vm = require('vm');
 const crypto = require('crypto');
 
+// The suites hand a real File to the page, and Node only grew a global File in
+// v20. Saying so here beats a dozen assertions failing with "not a constructor".
+if (typeof globalThis.File !== 'function') {
+  console.error('\n' + (process.argv[1] || 'the suites') +
+    ': this run needs Node 20.19 or newer — globalThis.File is missing, and the tests\n' +
+    'use it as the file a user picked. The page itself needs no Node at all; see the\n' +
+    'README. Running on ' + process.version + '.\n');
+  process.exit(2);
+}
+
 const LIB = path.join(__dirname, '..', 'lib');
 const FILES = ['util.js', 'manifest.js', 'crypto.js', 'pack.js', 'backends.js', 'receive.js', 'email.js'];
 // ui.js is intentionally not loaded: the tests drive the logic with a stub view.

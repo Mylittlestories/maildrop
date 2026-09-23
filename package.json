@@ -20,7 +20,7 @@
     "jsdom": "^29.1.1"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19"
   },
   "license": "MIT",
   "keywords": [

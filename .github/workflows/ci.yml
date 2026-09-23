@@ -1,11 +1,13 @@
 name: tests
 
-# The whole point of this project is that the shipped thing is the source, so CI
-# runs the four suites against it exactly as a reader would: install one dev
-# dependency (jsdom), then `npm test`. No build step to get wrong, and nothing
-# here reaches a third-party host — the suites use the local mock host, so a
-# flaky provider cannot turn this red.
-
+# The whole point of this project is that the shipped thing *is* the source, so CI
+# runs the four suites exactly as a reader would: install one dev dependency
+# (jsdom), then `npm test`. Nothing here reaches a third-party host — the suites
+# use the local mock host, so provider flakiness cannot turn this badge red.
+#
+# Node 22 and 24 are the supported LTS lines as of 2026. 18 and 20 are past end of
+# life and 18 cannot run these suites anyway (no global File before Node 20), which
+# the harness says out loud rather than failing tests.
 on:
   push:
     branches: [main]
@@ -18,11 +20,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [18, 20, 22]
+        node: [22, 24]
     name: suites on Node ${{ matrix.node }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
       - run: npm i --no-audit --no-fund

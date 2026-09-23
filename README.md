@@ -211,10 +211,14 @@ zero network.
 
 ```bash
 npm install            # jsdom only, and only for the browser test
-npm test               # unit + integration + browser + page, 71 tests
+npm test               # unit + integration + browser + page, 98 tests
 npm run test:browser   # any one suite on its own
 npm run live           # node tools/live-check.mjs — pokes the real public hosts
+npm run pages          # node tools/deployed-check.mjs — checks a deployed site
 ```
+
+Node 20.19 or newer, and that floor is jsdom's, not the app's: nothing in `lib/` or
+`index.html` runs in Node, and a deployment needs no Node at all — just static files.
 
 * `tests/unit.test.js` — manifest round trips, packing, crypto, email recovery.
 * `tests/integration.test.js` — real uploads against `tools/mock-host.mjs`.
@@ -225,6 +229,10 @@ npm run live           # node tools/live-check.mjs — pokes the real public hos
   third-party requests, script order, and every `<script src>` and doc link
   fetched from a real static server (`tools/serve.mjs`) to prove the deployed
   shape has nothing missing.
+* `tools/deployed-check.mjs` (`npm run pages`) — the same idea, aimed at a URL you
+  actually published: it compares the served bytes with the repo's, insists every
+  script still arrives as javascript, then runs that live page and sends and
+  reassembles a file through it. Give it your URL as an argument.
 * `tools/stress-5gb.mjs` — not part of `npm test` (it needs 10 GB of disk and a few
   minutes): 5 GiB of dummy bytes through the real page, up and back, with the
   result hashed independently, and the RSS curve printed while it goes so a leak is
