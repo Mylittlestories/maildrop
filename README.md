@@ -232,7 +232,7 @@ zero network.
 
 ```bash
 npm install            # jsdom only, and only for the browser test
-npm test               # unit + integration + browser + page, 98 tests
+npm test               # unit + integration + browser + page — 114 tests as of v1.1.1
 npm run test:browser   # any one suite on its own
 npm run live           # node tools/live-check.mjs — pokes the real public hosts
 npm run pages          # node tools/deployed-check.mjs — checks a deployed site
@@ -243,7 +243,10 @@ Node 20.19 or newer, and that floor is jsdom's, not the app's: nothing in `lib/`
 `index.html` runs in Node, and a deployment needs no Node at all — just static files.
 
 * `tests/unit.test.js` — manifest round trips, packing, crypto, email recovery.
-* `tests/integration.test.js` — real uploads against `tools/mock-host.mjs`.
+* `tests/integration.test.js` — real uploads against `tools/mock-host.mjs`, and
+  `tools/live-check.mjs` run against that same host as one of its tests: the tool that
+  answers "is the provider working" is itself checked, offline, because the broken version of that
+  tool is what let a broken upload be blamed on the host.
 * `tests/browser.test.js` — the actual page, all ten scripts, in jsdom, clicked
   like a user: pick → send → link → receive → byte-identical file, plus the
   password, split, corrupted-part and bring-your-own-link paths.
