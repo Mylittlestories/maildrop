@@ -36,6 +36,9 @@ const GB = Number(arg('--gb', 5));
 const PART_MB = Number(arg('--part', 96));
 const PW = arg('--password', '') || '';
 const KEEP = process.argv.includes('--keep');
+// --resume-check refuses one part on the first attempt, then lets the page continue
+// from where it stopped, which is the only way to know a big job survives a hiccup.
+const RESUME_CHECK = process.argv.includes('--resume-check');
 const SEND_ONLY = process.argv.includes('--send-only');
 const RECV_ONLY = process.argv.includes('--receive-only');
 const HOST_PORT = Number(arg('--host', 0));
@@ -183,8 +186,24 @@ if (!RECV_ONLY) {
   MD.app.state.cfg.password = PW;
   win.UI.renderFiles();
   console.log('\nplan: ' + doc.getElementById('planBox').textContent.replace(/\s+/g, ' ').slice(0, 200));
+  let calls = 0, injected = false, resumed = false, reusedNote = '';
+  if (RESUME_CHECK) {
+    const mock = MD.backends.get('mockhost');
+    const up = mock.upload.bind(mock);
+    mock.upload = async function (b, o) {
+      calls++;
+      if (!injected && calls === 3) {
+        injected = true;
+        const e = new Error('the stress harness refused this part');
+        e.retryable = false;
+        throw e;
+      }
+      return up(b, o);
+    };
+  }
   doc.getElementById('btnStart').click();
-  log('start pressed; part size ' + PART_MB + ' MB' + (PW ? ', encrypted with a password' : ', plaintext'));
+  log('start pressed; part size ' + PART_MB + ' MB' + (PW ? ', encrypted with a password' : ', plaintext') +
+    (RESUME_CHECK ? ', with one part refused on purpose' : ''));
 
   // the memory curve: a flat line is the whole point of the design, and a rising
   // one is a leak — either way it should be visible, not inferred from an OOM
@@ -194,7 +213,30 @@ if (!RECV_ONLY) {
   const linkT0 = Date.now();
   while (doc.getElementById('linkCard').hidden) {
     await new Promise((r) => setTimeout(r, 500));
+    if (injected && !resumed) {
+      const plan = doc.getElementById('planBox').textContent.replace(/\s+/g, ' ');
+      if (/earlier attempt left/.test(plan)) {
+        const rec = MD.app.resumeFor(MD.app.state.files[0]);
+        if (!rec || rec.done !== 2) throw new Error('the record is wrong after the refusal: ' + JSON.stringify(rec));
+        log('the refusal left 2 of ' + rec.count + ' parts stored; plan box says: ' + plan.slice(plan.indexOf('earlier attempt'), plan.indexOf('earlier attempt') + 150));
+        reusedNote = doc.getElementById('console').textContent;
+        if (!/still in your bucket|will stay there/.test(reusedNote)) throw new Error('no stranded-parts report: ' + reusedNote.slice(-200));
+        resumed = true;
+        doc.getElementById('btnStart').click();
+      } else if (Date.now() - linkT0 > 120000) {
+        throw new Error('the refused part did not produce a continuable job: ' + plan.slice(0, 200));
+      }
+    }
     if (Date.now() - linkT0 > 1500000) throw new Error('send did not finish in 25 min: ' + doc.getElementById('progMsg').textContent);
+  }
+  if (RESUME_CHECK) {
+    const planned = MD.app.state.lastManifest.parts.length;
+    log('resume check: ' + calls + ' upload calls for ' + planned + ' parts (expected ' + (planned + 1) +
+      ': two were kept from the failed attempt, one was the refusal itself)');
+    if (calls !== planned + 1) throw new Error('the continuation re-sent parts it could have kept: ' + calls + ' calls for ' + planned + ' parts');
+    if (!/came from the earlier attempt/.test(doc.getElementById('console').textContent)) throw new Error('the page never said what it reused');
+    if (!/continues from where it stopped/.test(reusedNote)) throw new Error('the failure did not say a retry would continue: ' + reusedNote.slice(-200));
+    if (MD.app.resumeFor(MD.app.state.files[0])) throw new Error('the record outlived the finished job');
   }
   clearInterval(curve);
   const m = MD.app.state.lastManifest;

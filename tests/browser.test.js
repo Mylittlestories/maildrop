@@ -148,6 +148,39 @@ let mock;
     dom.window.close();
   });
 
+  await test('the plan offers to continue a job that stopped partway', async () => {
+    const { dom, w, doc } = await bootPage();
+    const mock = w.MD.backends.get('mockhost');
+    const orig = mock.upload.bind(mock);
+    let n = 0, failAt = 2;
+    mock.upload = async function (b, o) {
+      n++;
+      if (failAt && n === failAt) { const e = new Error('the host refused this part'); e.retryable = false; throw e; }
+      return orig(b, o);
+    };
+    const file = new File([crypto.randomBytes(4 * 1024 * 1024)], 'clip.mov', { type: 'video/quicktime' });
+    w.MD.app.state.files = [file];
+    Object.assign(w.MD.app.state.cfg, { backend: 'mockhost', partCapBytes: '1MB', receiveBase: BASE + 'index.html', password: '' });
+    w.MD.backends.mock.base = BASE;
+    w.UI.renderFiles();
+    await w.MD.app.runSend();
+    eq(w.MD.app.resumeFor(file).done, 1, 'one part is remembered as stored');
+    const plan = doc.getElementById('planBox').textContent;
+    ok(/earlier attempt left/.test(plan), 'the plan says what is already on the host: ' + plan.slice(-240));
+    const btn = doc.getElementById('btnForgetResume');
+    ok(btn, 'and offers the way out of it');
+    btn.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 300));
+    eq(w.MD.app.resumeFor(file), null, 'the job is forgotten');
+    ok(/forgotten/.test(doc.getElementById('console').textContent), 'and it says what that does not fix: ' + doc.getElementById('console').textContent.slice(-160));
+    failAt = 0; n = 0;
+    await w.MD.app.runSend();
+    eq(n, 4, 'the next attempt sent all four parts, nothing reused');
+    const m = w.MD.app.state.lastManifest;
+    eq(m.parts.length, 4, 'and the link still carries the whole file');
+    dom.window.close();
+  });
+
   await test('a failed send says what its parts will do when the host has no delete API', async () => {
     const { dom, w, doc } = await bootPage();
     const mock = w.MD.backends.get('mockhost');

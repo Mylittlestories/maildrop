@@ -367,36 +367,188 @@ let mock;
     ok(biggest <= MDx.receive.CHUNK, 'the largest window was ' + biggest + ' bytes');
   });
 
-  await test('a send that dies partway deletes what it already put in your bucket', async () => {
+  await test('an attempt that dies partway is continued, not restarted', async () => {
     const sb = freshSandbox();
     const MDx = sb.MD;
     const self = MDx.backends.get('selfhost');
     Object.assign(MDx.app.state.cfg, {
       backend: 'selfhost', password: '', partCapBytes: '1MB',
       receiveBase: BASE + 'index.html',
-      s3: { endpoint: 'http://127.0.0.1:' + PORT, bucket: 'bucket', region: 'auto', keyId: 'k', secret: 's', keyPrefix: 'stranded/' }
+      s3: { endpoint: 'http://127.0.0.1:' + PORT, bucket: 'bucket', region: 'auto', keyId: 'k', secret: 's', keyPrefix: 'resume/' }
     });
-    MDx.app.state.files = [new sb.File([crypto.randomBytes(4 * 1024 * 1024)], 'vault.zip', { type: 'application/zip' })];
-    // the second part fails with nothing to retry, so the job dies with one stored
+    const buf = crypto.randomBytes(4 * 1024 * 1024);
+    const file = new sb.File([buf], 'vault.zip', { type: 'application/zip' });
+    MDx.app.state.files = [file];
     const orig = self.upload.bind(self);
     const keys = [];
     let n = 0;
+    let broken = true;
     self.upload = async function (body, opts) {
       n++;
-      // refuse *before* storing, so the app knows exactly what is on the host
-      if (n === 3) { const e = new Error('the host refused this part'); e.retryable = false; throw e; }
+      // refuse *before* storing, so what is on the host is exactly what is recorded
+      if (broken && n === 3) { const e = new Error('the host refused this part'); e.retryable = false; throw e; }
       const r = await orig(body, opts);
       keys.push(r.id);
       return r;
     };
     await MDx.app.runSend();
-    eq(keys.length, 2, 'two parts were stored before the job died');
+    eq(keys.length, 2, 'two parts got through before it died');
+    ok(!MDx.app.state.lastLink, 'and there was no link to give away');
     const notes = uiCalls.filter((c) => c[0] === 'note' || c[0] === 'warn').map((c) => c[1]).join(' | ');
-    ok(/2 of 2 uploaded parts were deleted from your bucket/.test(notes), 'the report counts what it cleaned: ' + notes.slice(-200));
-    for (const k of keys) {
-      const after = await fetch(BASE + 'f/' + k);
-      eq(after.status, 404, 'and ' + k + ' is gone — a signed DELETE went through');
-    }
+    ok(/are still in your bucket so this job can be continued/.test(notes), 'it said so: ' + notes.slice(-200));
+    const plan = MDx.app.resumeFor(file);
+    ok(plan && plan.done === 2, 'the plan knows 2 of 4 parts are stored: ' + JSON.stringify(plan && plan.done));
+
+    // the connection comes back: press Start again
+    broken = false;
+    await MDx.app.runSend();
+    eq(n, 5, 'the second attempt uploaded only the 2 missing parts, not 4: calls=' + n);
+    const link = uiCalls.filter((c) => c[0] === 'showLink').pop();
+    ok(link, 'and it produced a link');
+    const m = link[2];
+    eq(m.parts.length, 4, 'all four parts are in it');
+    eq(MDx.app.resumeFor(file), null, 'the record is gone once the job is finished');
+    // and the file it points at is the right file
+    const sb2 = freshSandbox();
+    sb2.MD.backends.get('mockhost').base = BASE;
+    MDx.app.state.files = [];
+    const res = await sb2.MD.receive.assemble(m, { urls: m.parts.map((p) => BASE + 'f/' + p.i) });
+    eq(Buffer.from(res.blob ? await res.blob.arrayBuffer() : res.bytes).toString('hex'), buf.toString('hex'),
+       'the continued job reassembles the exact bytes');
+  });
+
+  await test('rememberAttempts: false leaves no record to continue from', async () => {
+    const sb = freshSandbox();
+    const MDx = sb.MD;
+    MDx.config = { rememberAttempts: false };
+    const self = MDx.backends.get('selfhost');
+    Object.assign(MDx.app.state.cfg, {
+      backend: 'selfhost', password: '', partCapBytes: '1MB', receiveBase: BASE + 'index.html',
+      s3: { endpoint: 'http://127.0.0.1:' + PORT, bucket: 'bucket', region: 'auto', keyId: 'k', secret: 's', keyPrefix: 'nor/' }
+    });
+    const file = new sb.File([crypto.randomBytes(4 * 1024 * 1024)], 'x.zip', { type: 'application/zip' });
+    MDx.app.state.files = [file];
+    const orig = self.upload.bind(self);
+    let n = 0;
+    self.upload = async function (b, o) {
+      n++;
+      if (n === 3) { const e = new Error('no'); e.retryable = false; throw e; }
+      return orig(b, o);
+    };
+    await MDx.app.runSend();
+    eq(n, 3, 'two parts stored and a third attempted, as in the other tests');
+    eq(MDx.app.resumeFor(file), null, 'but this browser kept nothing about it');
+    eq(sb.localStorage.getItem('maildrop.resume.v1'), null, 'no record on disk either');
+  });
+
+  await test('an encrypted job continues, and refuses to continue on another password', async () => {
+    const sb = freshSandbox();
+    const MDx = sb.MD;
+    const self = MDx.backends.get('selfhost');
+    Object.assign(MDx.app.state.cfg, {
+      backend: 'selfhost', password: 'friday-only', partCapBytes: '1MB',
+      receiveBase: BASE + 'index.html',
+      s3: { endpoint: 'http://127.0.0.1:' + PORT, bucket: 'bucket', region: 'auto', keyId: 'k', secret: 's', keyPrefix: 'enc-resume/' }
+    });
+    const buf = crypto.randomBytes(4 * 1024 * 1024);
+    const file = new sb.File([buf], 'secrets.zip', { type: 'application/zip' });
+    MDx.app.state.files = [file];
+    const orig = self.upload.bind(self);
+    const keys = [];
+    let n = 0, failAt = 3;
+    self.upload = async function (body, opts) {
+      n++;
+      if (failAt && n === failAt) { const e = new Error('the host refused this part'); e.retryable = false; throw e; }
+      const r = await orig(body, opts);
+      keys.push(r.id);
+      return r;
+    };
+
+    await MDx.app.runSend();
+    eq(keys.length, 2, 'two sealed parts were stored before it died');
+    const plan = MDx.app.resumeFor(file);
+    ok(plan && plan.done === 2, 'the record carries them');
+    ok(plan.rec.salt && plan.rec.ivp && plan.rec.fp, 'with the salt, the IV prefix and the verifier — and no password');
+
+    failAt = 0;
+    await MDx.app.runSend();
+    eq(n, 5, 'the same password sent only the 2 missing parts');
+    const m = uiCalls.filter((c) => c[0] === 'showLink').pop()[2];
+    const sb2 = freshSandbox();
+    const res = await sb2.MD.receive.assemble(m, { password: 'friday-only', urls: m.parts.map((p) => BASE + 'f/' + p.i) });
+    eq(Buffer.from(res.blob ? await res.blob.arrayBuffer() : res.bytes).toString('hex'), buf.toString('hex'),
+      'and it opens as one file: the continued parts and the fresh ones were sealed with the same key');
+
+    // now the dangerous case: retry the leftover parts with a different password
+    MDx.app.state.cfg.password = 'friday-only';
+    n = 0; failAt = 2; keys.length = 0;
+    await MDx.app.runSend();
+    eq(keys.length, 1, 'one part stored, then the attempt died');
+    ok(MDx.app.resumeFor(file), 'and there is something to continue');
+    MDx.app.state.cfg.password = 'wrong-tuesday';
+    failAt = 0;
+    const before = n;
+    await MDx.app.runSend();
+    eq(n - before, 4, 'a different password re-sealed all four parts instead of mixing two keys');
+    const notes = uiCalls.filter((c) => c[0] === 'warn').map((c) => c[1]).join(' | ');
+    ok(/not the one the earlier attempt used/.test(notes), 'and it said why: ' + notes.slice(-160));
+    const m2 = uiCalls.filter((c) => c[0] === 'showLink').pop()[2];
+    const res2 = await freshSandbox().MD.receive.assemble(m2, { password: 'wrong-tuesday', urls: m2.parts.map((p) => BASE + 'f/' + p.i) });
+    eq(Buffer.from(res2.blob ? await res2.blob.arrayBuffer() : res2.bytes).toString('hex'), buf.toString('hex'),
+      'the fresh job is self-consistent and opens with the new password');
+  });
+
+  await test('a bucket job that is abandoned on purpose leaves nothing behind', async () => {
+    const sb = freshSandbox();
+    const MDx = sb.MD;
+    const self = MDx.backends.get('selfhost');
+    Object.assign(MDx.app.state.cfg, {
+      backend: 'selfhost', password: '', partCapBytes: '1MB',
+      receiveBase: BASE + 'index.html',
+      s3: { endpoint: 'http://127.0.0.1:' + PORT, bucket: 'bucket', region: 'auto', keyId: 'k', secret: 's', keyPrefix: 'abandoned/' }
+    });
+    const file = new sb.File([crypto.randomBytes(4 * 1024 * 1024)], 'vault.zip', { type: 'application/zip' });
+    MDx.app.state.files = [file];
+    const orig = self.upload.bind(self);
+    const keys = [];
+    let n = 0, failAt = 3, failKind = 'host';
+    self.upload = async function (body, opts) {
+      n++;
+      // the counter resets per attempt, so each run dies at the same part
+      if (failAt && n === failAt) {
+        const e = new Error(failKind === 'cancel' ? 'Cancelled.' : 'the host refused this part');
+        if (failKind === 'cancel') e.cancelled = true; else e.retryable = false;
+        throw e;
+      }
+      const r = await orig(body, opts);
+      keys.push(r.id);
+      return r;
+    };
+    // 1) it died, so the parts stay put for a continuation
+    await MDx.app.runSend();
+    eq(keys.length, 2, 'two parts were stored before it died');
+    ok(MDx.app.resumeFor(file), 'and there is a job to continue');
+    const still = await Promise.all(keys.map((k) => fetch(BASE + 'f/' + k).then((r) => r.status)));
+    eq(still.join(','), '200,200', 'they are still in the bucket, because a retry will use them');
+
+    // 2) the user chooses "Start over": that is a decision to abandon, so it deletes
+    const out = await MDx.app.forgetResume(file);
+    eq(MDx.app.resumeFor(file), null, 'the record is gone');
+    eq(out.removed.gone, 2, 'both objects were deleted');
+    eq(out.removed.failed, 0, 'nothing was left behind');
+    const after = await Promise.all(keys.map((k) => fetch(BASE + 'f/' + k).then((r) => r.status)));
+    eq(after.join(','), '404,404', 'the bucket really has them no more — a signed DELETE went through');
+
+    // 3) and an explicit Cancel takes the same route without asking
+    failKind = 'cancel'; n = 0;
+    await MDx.app.runSend();
+    eq(keys.length, 4, 'two more parts were stored before Cancel');
+    const notes = uiCalls.filter((c) => c[0] === 'note' || c[0] === 'warn').map((c) => c[1]).join(' | ');
+    ok(/Cancelled/.test(notes), 'Cancel is reported as a decision: ' + notes.slice(-160));
+    ok(/2 of 2 uploaded parts were deleted from your bucket/.test(notes), 'and it cleaned up: ' + notes.slice(-200));
+    eq(MDx.app.resumeFor(file), null, 'a cancelled job is not offered as a continuation');
+    const after2 = await Promise.all(keys.slice(2).map((k) => fetch(BASE + 'f/' + k).then((r) => r.status)));
+    eq(after2.join(','), '404,404', 'including the second pair');
   });
 
   await test('a host that accepts the request and then says nothing is given up on', async () => {

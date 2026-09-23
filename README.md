@@ -146,6 +146,15 @@ The manifest is deliberately tiny and looks like this:
 link, the link card has a folded *Backup* section with one short link per part —
 send those as separate emails and the receive page merges them into one job.
 
+**An attempt that stops is not a restart.** Parts already on the host are kept and
+reused: if a 28-part job dies at part 20, the next Start sends 8 and re-records the
+20 it cannot see, and the plan box tells you that is what will happen. For an
+encrypted job the record carries the salt and IV prefix (never the password), which
+is what lets the already-sealed parts join the new ones — and a *different* password
+on the retry is refused rather than mixed in. On your own bucket, **Cancel** or
+**Start over** deletes the stored parts; a free host has no delete API, so those
+age out on its clock. `MD.config.rememberAttempts = false` turns the record off.
+
 ---
 
 ## Password (optional, off by default)
@@ -211,7 +220,11 @@ npm run live           # node tools/live-check.mjs — pokes the real public hos
   shape has nothing missing.
 * `tools/stress-5gb.mjs` — not part of `npm test` (it needs 10 GB of disk and a few
   minutes): 5 GiB of dummy bytes through the real page, up and back, with the
-  result hashed independently. `--gb`, `--part` and `--password` are yours.
+  result hashed independently, and the RSS curve printed while it goes so a leak is
+  visible rather than inferred from a crash. `--gb`, `--part`, `--password`,
+  `--send-only`, `--receive-only` and `--keep` are yours; `--resume-check` refuses
+  one part on purpose and fails if the second attempt re-sends what the host still
+  has.
 
 The mock host is deliberately as strict about multipart framing as a real PHP
 endpoint, because a missing CRLF before the closing boundary once produced

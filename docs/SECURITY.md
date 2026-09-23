@@ -111,15 +111,34 @@ stated ceiling (`MD.config.maxMemoryBlob`, or 30 % of `navigator.deviceMemory`
 where the browser reports one) instead of trying and dying, and hands over the
 host address so the file can still be had.
 
+## The half-finished job, which is a record with capabilities in it
+
+To continue an upload that died, the page keeps a small record in this browser's
+`localStorage`: the part ids it had already stored, their sizes and digests, and
+for an encrypted job the salt, the IV prefix and the password verifier. It is
+deliberately the same kind of thing the link itself is — an id is what grants
+access to an object — and it deliberately holds no password and no key, so a
+continuation still needs the password typed again, and a *different* password is
+refused rather than mixed into the file (the verifier is what catches that).
+
+What follows from it: anyone with this browser can finish or reconstruct a job that
+did not complete, exactly as they could with a link from the history list. The
+record is cleared when the job finishes, when you press Cancel, when you choose
+Start over, and by *Wipe* in Settings. `MD.config.rememberAttempts = false` keeps
+the browser from writing it at all, at the cost of starting over each time.
+
 ## What an abandoned upload leaves behind
 
-A send that fails or is cancelled at part 7 has put 6 parts on the host. No link
-points at them, so nothing can be reassembled — but the bytes exist until the
-host's clock deletes them, and a free host offers no way to hurry that along. The
-page says so plainly rather than letting "Cancelled" imply nothing happened.
+A send that fails at part 7 has put 6 parts on the host. No link points at them,
+so nothing can be reassembled from them — but the bytes exist until the host's
+clock deletes them, and a free host offers no way to hurry that along. The page
+says how many are stranded and until when, rather than letting "Cancelled" imply
+nothing happened, and it puts those parts to use: the next Start continues from
+part 8 instead of uploading 7 parts again and leaving twice as much behind.
 
-A bucket you hold credentials for is different: `MD.app` deletes the parts it
-already stored when a job dies, so an abandoned upload does not outlive the
-decision to make it. This needs `DELETE` allowed in the bucket's CORS settings;
-without it the page reports which objects survived and leaves the keys in the
-failed link so they can be removed by hand.
+A bucket you hold credentials for is where the choice is real. A *failure* keeps
+the parts, because continuing is the useful thing; *Cancel* and *Start over* delete
+them, because those are decisions to abandon. That needs `DELETE` allowed in the
+bucket's CORS settings; without it the page reports which objects survived and
+gives the keys, which are the part ids in the failed link, so they can be removed
+by hand.

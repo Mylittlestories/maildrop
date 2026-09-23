@@ -113,6 +113,12 @@ timeout by default. A line that drops sessions wants more `uploadAttempts`. And 
 kiosk with 4 GB of RAM on Firefox should find out it cannot hold a 5 GiB download
 in a tab *before* it spends six minutes downloading it.
 
+`rememberAttempts: false` is the one that changes what the browser stores rather
+than how it talks to a host: a half-finished job is remembered in `localStorage`
+(so the next Start sends only the missing parts), and on a shared machine you may
+not want that record at all. Turning it off costs nothing but the continuation —
+every part is simply sent again.
+
 `maxMemoryBlob` is only consulted when the browser offers no way to stream to disk
 (Chrome and Edge do, via the save-file picker; Safari and Firefox do not). Where
 `navigator.deviceMemory` is available the page uses 30 % of reported RAM instead of
