@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="md-t md-d">
+  <title id="md-t">MailDrop</title>
+  <desc id="md-d">A white arrow dropping into an open tray, on a sky-blue rounded square. Generated from tools/make-icons.mjs — do not hand-edit.</desc>
+  <defs>
+    <linearGradient id="md-g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#md-g)"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M256 100V286"/>
+      <path d="M194 236L256 312L318 236"/>
+      <path d="M78 276L108 316M434 276L404 316M108 316V368Q108 412 152 412H360Q404 412 404 368V316"/>
+  </g>
+</svg>

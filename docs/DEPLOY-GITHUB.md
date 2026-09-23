@@ -1,7 +1,10 @@
 # Deploying MailDrop to GitHub Pages (or anywhere else)
 
-The whole app is `index.html` plus ten files in `lib/`. There is no build step,
-no dependency, no `dist/` — if the files are served, the app works.
+The whole app is `index.html` plus ten files in `lib/`, with `assets/` and
+`manifest.webmanifest` alongside for the icon and the home-screen tile. There is no
+build step, no dependency, no `dist/` — if the files are served, the app works. (The
+icon files are the only cosmetic ones: drop a reference to them from `index.html` and
+nothing else notices.)
 
 ## GitHub Pages — about ten minutes
 

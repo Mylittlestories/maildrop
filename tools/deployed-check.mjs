@@ -80,6 +80,23 @@ const say = (...a) => console.log(...a);
   }
   say('files: all ten reachable, served as javascript, byte-identical to the repo ✓');
 
+  // The icon set is the part a partial deploy always forgets, so it is checked
+  // the same way as the scripts: present, right type, same bytes as the repo.
+  const assetRefs = [...new Set([...html.matchAll(/(?:href|src)="((?:assets\/[^"]+|manifest\.webmanifest))"/g)].map((m) => m[1]))];
+  if (!assetRefs.length) throw new Error('the live page references no icon assets — the deploy predates the icon set');
+  for (const ref of assetRefs) {
+    const r = await fetch(abs(ref).href, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!r.ok) throw new Error(ref + ' → HTTP ' + r.status + ' — the page promises an icon the host does not serve. Deploy assets/ and manifest.webmanifest too.');
+    const ct = r.headers.get('content-type') || '';
+    if (ref.endsWith('.webmanifest')) { if (!/json/.test(ct)) throw new Error(ref + ' is served as "' + ct + '" — a browser ignores a manifest that is not JSON'); }
+    else if (!/^image\//.test(ct)) throw new Error(ref + ' is served as "' + ct + '" — not an image');
+    const mine = path.join(ROOT, ref);
+    if (!fs.existsSync(mine)) throw new Error(ref + ' is on the live host but not in the repo');
+    const got = Buffer.from(await r.arrayBuffer());
+    if (!got.equals(fs.readFileSync(mine))) throw new Error(ref + ' on the live host is not the file in the repo');
+  }
+  say('icons: ' + assetRefs.length + ' asset(s) served, right type, byte-identical ✓');
+
   // Now run it. The shims are the same ones the browser suite uses (jsdom has no
   // fetch-backed XHR and no WebCrypto on its window), so what executes here is the
   // live scripts against a real-ish browser surface. Errors the page reports are

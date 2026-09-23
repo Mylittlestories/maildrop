@@ -6,7 +6,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MailDrop — send big files by email link, no account, no server</title>
 <meta name="description" content="Pack any file into an email-safe download link. Static page, no backend, no subscription, nothing to install. Files go from your browser straight to a temporary host; the link is what travels by email.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b1220'/%3E%3Cpath d='M12 20h40v24H12z' fill='none' stroke='%2338bdf8' stroke-width='4'/%3E%3Cpath d='M12 22l20 15 20-15' fill='none' stroke='%2338bdf8' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/icon-16.png">
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0284C7">
 <style>
 :root{
   --bg:#070b14; --bg2:#0d1424; --card:#111a2c; --card2:#0e1626; --line:#22304a;
@@ -27,7 +32,7 @@ body{
 a{color:var(--accent)}
 header{display:flex;align-items:center;gap:14px;padding:18px 20px 8px;max-width:1080px;margin:0 auto;flex-wrap:wrap}
 .logo{font-size:22px;font-weight:650;letter-spacing:.2px;display:flex;align-items:center;gap:9px}
-.logo .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 16px var(--accent)}
+.logo .mark{width:27px;height:27px;border-radius:6px;display:block;filter:drop-shadow(0 3px 12px rgba(56,189,248,.38))}
 .tagline{color:var(--dim);font-size:13px;margin-left:2px}
 nav{margin-left:auto;display:flex;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:4px}
 nav button{all:unset;cursor:pointer;padding:7px 14px;border-radius:9px;font-size:14px;color:var(--dim);font-weight:550}
@@ -39,9 +44,11 @@ section.on{display:block}
 .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
 .grow{flex:1 1 260px;min-width:0}
 .drop{
-  border:1.5px dashed #2f4468;border-radius:16px;padding:34px 20px;text-align:center;
+  border:1.5px dashed #2f4468;border-radius:16px;padding:30px 20px 32px;text-align:center;
   background:rgba(56,189,248,.045);transition:.16s;cursor:pointer
 }
+.drop .mark{width:38px;height:38px;border-radius:9px;display:block;margin:0 auto 10px;opacity:.96;transition:.16s}
+.drop:hover .mark,.drop.hot .mark{transform:translateY(-2px)}
 .drop.hot{border-color:var(--accent);background:rgba(56,189,248,.13)}
 .drop b{font-size:16px}
 .drop p{margin:6px 0 0;color:var(--dim);font-size:13px}
@@ -122,7 +129,7 @@ details.adv>.advbody{padding:2px 13px 13px}
 </head>
 <body>
 <header>
-  <div class="logo"><span class="dot"></span>MailDrop</div>
+  <div class="logo"><img class="mark" src="assets/icon.svg" alt="" width="27" height="27">MailDrop</div>
   <div class="tagline">big files → email link · no account · no subscription · no server of yours</div>
   <nav>
     <button data-tab="send" class="on">Send</button>
@@ -147,6 +154,7 @@ details.adv>.advbody{padding:2px 13px 13px}
     </div></div>
 
     <div class="drop" id="drop">
+      <img class="mark" src="assets/icon.svg" alt="" width="38" height="38">
       <b>Drop one file here, or click to browse</b>
       <p>zip a folder first if you want to send several files as one</p>
       <input type="file" id="fileInput" hidden>

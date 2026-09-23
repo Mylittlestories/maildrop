@@ -122,5 +122,51 @@ function idRefs(file) {
     }
   });
 
+  await test('the icon set the page promises is really there, and really an image', async () => {
+    const { startServe } = require('./harness.js');
+    const srv = await startServe(ROOT);
+    try {
+      const refs = [...html.matchAll(/<(?:link|img)[^>]*(?:href|src)="((?:assets\/[^"]+|manifest\.webmanifest))"/g)].map((m) => m[1]);
+      ok(refs.length >= 6, 'the page references its whole icon set, found ' + refs.length);
+      for (const ref of new Set(refs)) {
+        const r = await fetch(srv.base + ref);
+        eq(r.status, 200, ref + ' is served next to the page');
+        const ct = r.headers.get('content-type') || '';
+        ok(/image\/|manifest\+json|application\/json/.test(ct), ref + ' arrives as an image or manifest, not "' + ct + '"');
+      }
+      // a favicon declared at the wrong size is served but ignored by the browser,
+      // so the size attribute is checked against the PNG header rather than trusted
+      const declared = [...html.matchAll(/<link rel="icon"[^>]*sizes="(\d+)x(\d+)"[^>]*href="([^"]+)"/g)];
+      ok(declared.length >= 2, 'the raster favicons declare their sizes');
+      for (const [, w, h, href] of declared) {
+        const buf = fs.readFileSync(path.join(ROOT, href));
+        eq(buf.readUInt32BE(16), Number(w), href + ' really is ' + w + ' px wide');
+        eq(buf.readUInt32BE(20), Number(h), href + ' really is ' + h + ' px tall');
+      }
+    } finally {
+      srv.kill();
+    }
+  });
+
+  await test('the shipped icons are the generated ones, not a hand edit', async () => {
+    const mod = await import('../tools/make-icons.mjs');     // imported, not run: no rasterising here
+    eq(fs.readFileSync(path.join(ROOT, 'assets/icon.svg'), 'utf8'), mod.iconSvg(),
+      'assets/icon.svg is byte-for-byte what tools/make-icons.mjs writes');
+    eq(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8'), mod.manifestText(),
+      'manifest.webmanifest is byte-for-byte what tools/make-icons.mjs writes');
+    const man = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8'));
+    ok(man.icons.length === 3, 'the manifest offers 192, 512 and a maskable 512');
+    for (const ic of man.icons) {
+      const buf = fs.readFileSync(path.join(ROOT, ic.src));
+      eq(buf.readUInt32BE(16), Number(ic.sizes.split('x')[0]), ic.src + ' is the width the manifest claims');
+      eq(buf.readUInt32BE(20), Number(ic.sizes.split('x')[1]), ic.src + ' is the height the manifest claims');
+      ok(buf.length > 400, ic.src + ' carries actual pixels (' + buf.length + ' bytes)');
+    }
+    ok(man.start_url === './' && man.scope === './', 'installed, it starts and stays on this site');
+    const G = mod.GEOMETRY;
+    ok(G.CHEVRON_TIP <= G.TRAY_TOP, 'the arrow head stops at the rim: caught, not punched through the tray');
+    ok(G.TRAY_TOP - G.FLARE_H >= G.CHEVRON_ARM_Y + 30, 'the flared wall tops clear the arrow arms — at 16 px, anything closer fuses into one smudge');
+  });
+
   report('page');
 })();

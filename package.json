@@ -14,7 +14,9 @@
     "test:page": "node tests/page.test.js",
     "live": "node tools/live-check.mjs",
     "stress": "node tools/stress-5gb.mjs",
-    "pages": "node tools/deployed-check.mjs"
+    "pages": "node tools/deployed-check.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "icons:check": "node tools/make-icons.mjs --check"
   },
   "devDependencies": {
     "jsdom": "^29.1.1"

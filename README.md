@@ -215,6 +215,7 @@ npm test               # unit + integration + browser + page, 98 tests
 npm run test:browser   # any one suite on its own
 npm run live           # node tools/live-check.mjs — pokes the real public hosts
 npm run pages          # node tools/deployed-check.mjs — checks a deployed site
+npm run icons:check    # node tools/make-icons.mjs --check — the shipped icons match the geometry
 ```
 
 Node 20.19 or newer, and that floor is jsdom's, not the app's: nothing in `lib/` or
@@ -245,6 +246,38 @@ The mock host is deliberately as strict about multipart framing as a real PHP
 endpoint, because a missing CRLF before the closing boundary once produced
 "the file field is required" from a live provider while every local test passed.
 
+## The icon
+
+<img src="assets/icon-512.png" width="92" height="92" alt="MailDrop: a white arrow dropping into an open tray, on a sky-blue rounded square">
+
+One mark: a white arrow dropping into an open tray on a sky-blue field. That is the
+WeTransfer move — a flat colour, one shape, nothing that needs reading — drawn from
+scratch here; it is not their logo and shares nothing with it.
+
+`assets/icon.svg` is the master, and the browser tab, the header, the home-screen
+tile, the Android launcher and this README are all the same geometry. It is not typed
+out five times, because an icon set copied between files always drifts:
+
+```bash
+npm run icons          # regenerate assets/ + manifest.webmanifest from the geometry
+npm run icons:check    # fail if what is checked in is not what the tool writes (CI does this)
+```
+
+The shape lives in the constants at the top of `tools/make-icons.mjs`, which writes
+the SVG *and* rasterises every PNG with a hand-written encoder and a supersampled
+coverage test — so there is no image toolchain to install, and no font or renderer to
+hope the next contributor has. The numbers are the interesting part: the arrow head
+stops at the tray rim rather than crossing it, and the flared wall tops sit far enough
+below the arrow's arms that the two do not fuse. At 16 px that gap is the difference
+between a mark and a smudge, which is not visible while editing an SVG at 512, so
+`npm test` asserts the geometry itself and not just that the files exist. It also
+checks the favicon `sizes` attributes against the PNG headers, because a lying `sizes`
+is served happily and ignored silently.
+
+The icon is under the same MIT licence as the code. To make it yours: replace the
+files in `assets/` keeping the names, or change the constants and run `npm run icons`.
+
+
 ## Deploy
 
 Ten minutes, no build step, no server code:
@@ -266,7 +299,9 @@ lib/app.js          the two flows and the settings that drive them
 lib/config.js       optional pre-configuration for a shared deployment (bucket, part
                     size, and the three behaviour knobs: stall seconds, upload
                     attempts, in-memory ceiling)
-tools/              mock host (tests) and a live provider check
+assets/             the icon set: master SVG plus the PNG sizes browsers insist on
+manifest.webmanifest  install metadata — name, icons, theme colour
+tools/              mock host, live provider check, deployment check, icon generator
 tests/              four suites + a harness
 ```
 
