@@ -46,7 +46,7 @@ const PREAMBLE = [
 function buildHtml() {
   let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const scripts = [...html.matchAll(/<script src="(lib\/[^"]+)"><\/script>/g)].map((m) => m[1]);
-  if (scripts.length !== 11) throw new Error('expected eleven scripts, found ' + scripts.length);
+  if (scripts.length !== 12) throw new Error('expected twelve scripts, found ' + scripts.length);
   const inlined = scripts.map((f) => '<script>' + fs.readFileSync(path.join(ROOT, f), 'utf8') + '<\/script>').join('\n');
   html = html.replace(/<script src="lib\/[^"]+"><\/script>/g, '');
   const head = '<script>' + PREAMBLE + '<\/script>';

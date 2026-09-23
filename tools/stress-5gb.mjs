@@ -128,7 +128,7 @@ const BASE = 'http://127.0.0.1:' + PORT + '/';
 // meant)
 let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="(lib\/[^"]+)"><\/script>/g)].map((m) => m[1]);
-if (scripts.length !== 11) throw new Error('expected eleven scripts, found ' + scripts.length);
+if (scripts.length !== 12) throw new Error('expected twelve scripts, found ' + scripts.length);
 html = html.replace(/<script src="lib\/[^"]+"><\/script>/g, () => '');
 html = html.replace('</body>', () => scripts.map((f) =>
   '<script>' + fs.readFileSync(path.join(ROOT, f), 'utf8') + '<\/script>').join('\n') + '</body>');

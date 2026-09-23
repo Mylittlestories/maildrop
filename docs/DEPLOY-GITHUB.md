@@ -1,6 +1,6 @@
 # Deploying MailDrop to GitHub Pages (or anywhere else)
 
-The whole app is `index.html` plus eleven files in `lib/` (ten plus the vendored QR helper), with `assets/` and
+The whole app is `index.html` plus twelve files in `lib/` (ten plus the QR helper and the P2P helper), with `assets/` and
 `manifest.webmanifest` alongside for the icon and the home-screen tile. There is no
 build step, no dependency, no `dist/` — if the files are served, the app works. (The
 icon files are the only cosmetic ones: drop a reference to them from `index.html` and
@@ -75,7 +75,7 @@ so in the context badges rather than fail confusingly. Use the GitHub Pages
 
 It is what makes "a manifest from someone else's email" survivable: even if a future
 change forgot a URL check, a `javascript:` payload cannot execute, because no
-script that is not one of this folder's eleven files is allowed to run. Two
+script that is not one of this folder's twelve files is allowed to run. Two
 consequences if you edit the page: **do not add inline `<script>` blocks or
 `onclick=` attributes** (add a file in `lib/` instead), and if you serve the page
 with your own CSP header, keep `script-src 'self'` — the app needs no other

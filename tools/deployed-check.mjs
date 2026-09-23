@@ -51,10 +51,10 @@ const say = (...a) => console.log(...a);
   const inline = [...html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/g)]
     .filter((m) => m[1].trim().length);
   const csp = /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(html);
-  if (srcs.length !== 11) throw new Error('expected eleven scripts on the live page, found ' + srcs.length);
+  if (srcs.length !== 12) throw new Error('expected twelve scripts on the live page, found ' + srcs.length);
   if (inline.length) throw new Error('the live page carries executable inline script, which its own CSP forbids');
   if (!csp || !/script-src 'self'/.test(csp[1])) throw new Error("no script-src 'self' policy on the live page");
-  say('markup: eleven scripts, no inline script, CSP present ✓');
+  say('markup: twelve scripts, no inline script, CSP present ✓');
 
   // Every file the page names must be there, be a script, and be the bytes we
   // shipped. Byte identity is the point: a stale deploy is the failure mode a
@@ -78,7 +78,7 @@ const say = (...a) => console.log(...a);
       throw new Error(s + ' is NOT the file we shipped (live ' + sha(body) + ' vs local ' + sha(fs.readFileSync(mine, 'utf8')) + ')');
     }
   }
-  say('files: all ten reachable, served as javascript, byte-identical to the repo ✓');
+  say('files: all twelve reachable, served as javascript, byte-identical to the repo ✓');
 
   // The icon set is the part a partial deploy always forgets, so it is checked
   // the same way as the scripts: present, right type, same bytes as the repo.
