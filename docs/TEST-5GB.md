@@ -58,7 +58,8 @@ link will be real.
 ## Sending it for real (two commands)
 
 ```bash
-cd maildrop && npm run serve      # http://localhost:8080  (or use your GitHub Pages URL)
+cd maildrop && npm run serve      # http://localhost:8080  (or just use the live page at
+https://mylittlestories.github.io/maildrop/ — see the top of this file)
 ```
 
 Open the page → **1** choose the file → **2** pick *Litterbox (72 h)* and leave the part size
@@ -81,7 +82,7 @@ npm run stress -- --gb 5 --part 96 --keep
 > Download: https://litter.catbox.moe/«your-id»
 >
 > If your browser refuses that link, open this page instead and it will fetch the file
-> for you, verify it and save it: https://«your-github-pages-url»/index.html#«token»
+> for you, verify it and save it: https://mylittlestories.github.io/maildrop/index.html#«token»
 >
 > Held by: litter.catbox.moe — deleted automatically after 72 hours.
 > Size: 5 GiB (5 368 709 120 bytes). SHA-256 d69ba227c636991d296b2275b49b35c71b5c97618513a5496b3eedb0abce4b7b

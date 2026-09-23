@@ -1,5 +1,7 @@
 # MailDrop
 
+[![tests](https://github.com/Mylittlestories/maildrop/actions/workflows/ci.yml/badge.svg)](https://github.com/Mylittlestories/maildrop/actions/workflows/ci.yml)
+
 Send a file that is far too big for an attachment — 2 GB, 20 GB, more — from a
 plain web page, as a **single link** in a normal email. No account, no
 subscription, no server of your own to write code for, nothing for the

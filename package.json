@@ -13,10 +13,11 @@
     "test:browser": "node tests/browser.test.js",
     "test:page": "node tests/page.test.js",
     "live": "node tools/live-check.mjs",
-    "stress": "node tools/stress-5gb.mjs"
+    "stress": "node tools/stress-5gb.mjs",
+    "pages": "node tools/deployed-check.mjs"
   },
   "devDependencies": {
-    "jsdom": "*"
+    "jsdom": "^29.1.1"
   },
   "engines": {
     "node": ">=18"
