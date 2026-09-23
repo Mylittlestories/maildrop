@@ -235,7 +235,7 @@ let mock;
     ok(/Chrome|Edge/.test(trail), 'and named what to do instead');
     eq(w.MD.app.state.receive.resultBlob, null, 'no file was assembled in memory');
     eq(doc.getElementById('btnDownload').disabled, true, 'nothing was offered for saving');
-    eq(doc.getElementById('recvPill').textContent.indexOf('failed') >= 0 || true, true, 'the pill reported it');
+    ok(/failed|stopped|refused/i.test(doc.getElementById('recvPill').textContent), 'the pill said: ' + doc.getElementById('recvPill').textContent);
     dom.window.close();
   });
 
@@ -596,9 +596,70 @@ let mock;
     w2.w.MD.app.state.receive.m = m;
     // fetch the wrong expected size so the payload hash check is what fires
     await w2.w.MD.app.runReceive(m);
-    const msg = w2.doc.getElementById('linkNote').textContent + w2.doc.getElementById('context').textContent;
+    const trail = w2.doc.getElementById('console').textContent + w2.doc.getElementById('linkNote').textContent;
     ok(w2.doc.getElementById('btnDownload').disabled, 'no file was offered for saving');
-    ok(/do not trust|does not match|fingerprint/i.test(msg) || true, 'the page said something alarming: ' + msg.slice(0, 90));
+    ok(/hash|fingerprint|does not match|do not trust/i.test(trail), 'the page said something alarming: ' + trail.slice(-160));
+  });
+
+
+  await test('the recipient address is in front of you, and the webmail buttons use it', async () => {
+    const { dom, w, doc } = await bootPage();
+    const buf = crypto.randomBytes(256 * 1024);
+    w.MD.app.state.files = [new File([buf], 'clip.mp4', { type: 'video/mp4' })];
+    w.MD.app.state.cfg.backend = 'mockhost';
+    w.MD.app.state.cfg.receiveBase = BASE + 'index.html';
+    w.MD.backends.mock.base = BASE;
+    w.UI.renderFiles();
+    await w.MD.app.runSend();
+
+    // the complaint was "I can't insert my email": the field was behind a collapsed
+    // <details>, so ask the DOM what a user's eye would find
+    eq(doc.getElementById('toInput').closest('details'), null, 'the To field is not behind a disclosure');
+    eq(doc.getElementById('btnMailto').closest('details'), null, 'neither is the button that uses it');
+
+    // jsdom has no mail app and no real window.open, so capture the navigation
+    let opened = '';
+    w.open = function (url) { opened = url; return { name: 'tab' }; };
+    doc.getElementById('toInput').value = 'someone@example.com';
+    doc.getElementById('btnGmail').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    ok(opened.startsWith('https://mail.google.com/mail/?view=cm'), 'Gmail draft opened: ' + opened.slice(0, 44));
+    ok(opened.includes(encodeURIComponent('someone@example.com')), 'with the address that was typed');
+    ok(opened.includes(encodeURIComponent(doc.getElementById('linkText').value)), 'with the link inside the body');
+    opened = '';
+    doc.getElementById('btnOutlook').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    ok(opened.startsWith('https://outlook.office.com/mail/deeplink/compose?to='), 'Outlook uses its own compose shape');
+
+    opened = '';
+    doc.getElementById('toInput').value = 'a@b.com?to=victim@x.com';
+    doc.getElementById('btnGmail').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    ok(!/victim/.test(opened), 'an address that would smuggle a second recipient is not used at all: ' + opened.slice(0, 60));
+    ok(/not an address/i.test(doc.getElementById('console').textContent), 'and the page says so out loud');
+    dom.window.close();
+  });
+
+  await test('the host check button answers the question the Send tab exists to ask', async () => {
+    const { dom, w, doc } = await bootPage();
+    w.MD.app.state.cfg.backend = 'mockhost';
+    w.MD.backends.mock.base = BASE;
+    doc.getElementById('btnProbe').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    eq(doc.getElementById('probeOut').hidden, false, 'the panel opened before the answer arrived');
+    await waitUntil(() => /upload ✓|reachability ✗/.test(doc.getElementById('probeOut').textContent), 20000, 'the probe');
+    const txt = doc.getElementById('probeOut').textContent;
+    ok(/page origin  \S+/.test(txt), 'it names this page origin: ' + txt.split('\n')[0]);
+    ok(/reachability ✓/.test(txt), 'reachability, as its own line');
+    ok(/upload ✓/.test(txt), 'and the real 1 KiB upload through the same path a part uses');
+    ok(doc.getElementById('probeHint').textContent.indexOf('works from this device') >= 0, 'the hint agrees with the verdict');
+    eq(doc.getElementById('btnProbe').disabled, false, 'and the button works again afterwards');
+
+    // then the same button against a host that is not there, because that is the
+    // case the message has to get right
+    w.MD.backends.mock.base = 'http://127.0.0.1:1/';
+    doc.getElementById('btnProbe').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await waitUntil(() => /reachability ✗/.test(doc.getElementById('probeOut').textContent), 20000, 'the second probe');
+    const bad = doc.getElementById('probeOut').textContent;
+    ok(/not a CORS problem/.test(bad), 'it blames the network, not CORS: ' + bad.split('\n').slice(2).join(' ').slice(0, 90));
+    ok(!/upload ✓/.test(bad), 'and it did not claim to have uploaded anything');
+    dom.window.close();
   });
 
   report('browser');

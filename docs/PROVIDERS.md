@@ -31,6 +31,30 @@ a fallback button on the receive page: "the host will only serve a human click" 
 the most common property of free file hosts, and a page like this should degrade to
 it gracefully instead of pretending the file is broken.
 
+## If the upload fails from *your* device
+
+The table above was measured from one place. A public host's WAF does not draw its lines
+where you happen to be standing: the same request refused with `403` from a hosting
+range is accepted from a home connection, and a carrier's NAT pool can be blocked as
+thoroughly as a datacenter one. `500` from a host that worked yesterday is also normal
+for a free service. So the answer to "the transfer fails on my phone" is not usually a
+code change — it is a measurement, taken where you are:
+
+**Send tab → “Check this host from this device”.** Three outcomes you can act on:
+
+* **nothing answered** → your network is refused, or the host is down. Try a phone
+  hotspot: if that works, the diagnosis is complete and the fix is your own bucket or
+  another network, not this page.
+* **the host answered, the page could not read it** → their CORS header went missing,
+  or a filtered DNS / browser extension is stripping it. Use your own bucket.
+* **`HTTP 500` / `503`** → the endpoint itself is unhappy. MailDrop retries with
+  backoff, then says so; a free host is not yours to fix, which is the entire argument
+  for a bucket.
+
+And for anything you can already host: **A link I already have** needs no upload at all.
+The email, the link and the receive page still work; only the automatic verify depends
+on the other host.
+
 ## Why Litterbox and not something permanent
 
 `files.catbox.moe` keeps files forever, which is exactly what you do **not** want

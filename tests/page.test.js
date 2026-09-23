@@ -72,7 +72,7 @@ function idRefs(file) {
     eq(/<(script|link)\b|document\.write|importScripts|new Worker|createElement\("script"\)/i.test(code), false, 'no dynamic script loading');
     ok(code.includes('litterbox.catbox.moe'), 'the only remote hosts are the storage endpoints you choose');
     eq((code.match(/https?:\/\/(?!127\.0\.0\.1|localhost|s3\.|files\.catbox|litter\.catbox|litterbox|tmpfiles)[a-z0-9.-]+\//gi) || [])
-      .filter((u) => !/schema|w3\.org|example|amazonaws|backblazeb2|cloudflare|wasabi|catbox|tmpfiles/.test(u)).join(' '), '', 'stray third-party URLs');
+            .filter((u) => !/schema|w3\.org|example|amazonaws|backblazeb2|cloudflare|wasabi|catbox|tmpfiles|mail\.google\.com|outlook\.office\.com/.test(u)).join(' '), '', 'stray third-party URLs');
   });
 
   await test('nothing in the shipped page leaks a secret to the host', () => {
@@ -145,6 +145,52 @@ function idRefs(file) {
       }
     } finally {
       srv.kill();
+    }
+  });
+
+  await test('the webmail compose links are navigations the user starts, never requests the page makes', () => {
+    // lib/email.js names two third-party hosts so a device with no mail app behind
+    // mailto: can still send. That is only acceptable while nothing is *loaded* from
+    // them, so the exception is fenced in instead of merely listed in the allowlist.
+    const hosts = /mail\.google\.com|outlook\.office\.com/;
+    eq(hosts.test(html), false, 'index.html must not mention a compose host — a link, img or script there is fetched on every page view');
+    const offenders = [];
+    for (const f of ['util.js', 'config.js', 'manifest.js', 'crypto.js', 'pack.js', 'backends.js', 'receive.js', 'email.js', 'ui.js', 'app.js']) {
+      fs.readFileSync(path.join(LIB, f), 'utf8').split('\n').forEach((line, i) => {
+        if (hosts.test(line) && /fetch\(|XMLHttpRequest|new Image|createElement\(|@import|url\(|importScripts/.test(line)) {
+          offenders.push(f + ':' + (i + 1) + ' ' + line.trim().slice(0, 70));
+        }
+      });
+    }
+    eq(offenders.join(' | '), '', 'a compose host must never sit next to a request primitive');
+    const em = fs.readFileSync(path.join(LIB, 'email.js'), 'utf8');
+    ok(/The compose URL has to be https/.test(em), 'composeUrl refuses a non-https compose template');
+    ok(fs.readFileSync(path.join(LIB, 'ui.js'), 'utf8').includes("global.open(c.url, '_blank', 'noopener')"),
+      'ui only ever opens it, in a new tab, with noopener');
+  });
+
+  await test('no CSS escape is double-escaped in the style block', () => {
+    // content:"\\\\25B8" is a literal backslash then the digits 25B8; content:"\\25B8" is a
+    // triangle. The first one shipped, so every collapsible heading printed raw
+    // digits on top of its own text — a cosmetic bug no JS test could notice, so the
+    // stylesheet gets one.
+    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    const doubled = style.match(/content:\s*"[^"]*\\\\[^"]*"/g) || [];
+    eq(doubled.join(' '), '', 'doubled backslash in a CSS content string: ' + doubled.join(' '));
+    ok(/content:"\\25B8"/.test(style), 'the collapsed marker is the real triangle');
+  });
+
+  await test('the recipient address is in the card, not behind a disclosure', () => {
+    // "who gets this" is the point of step 3; hiding the field inside a collapsed
+    // <details> is what made a user report that they could not enter an address.
+    const card = html.slice(html.indexOf('id="linkCard"'), html.indexOf('</section>', html.indexOf('id="linkCard"')));
+    const to = card.indexOf('id="toInput"');
+    ok(to >= 0, 'the link card has a To field');
+    const firstDetails = card.indexOf('<details');
+    ok(to < firstDetails, 'the To field sits above every collapsible in the card');
+    for (const id of ['btnMailto', 'btnGmail', 'btnOutlook']) {
+      const at = card.indexOf('id="' + id + '"');
+      ok(at >= 0 && at < firstDetails, id + ' is beside the address, not hidden');
     }
   });
 

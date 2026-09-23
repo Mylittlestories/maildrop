@@ -190,6 +190,27 @@ file**. If the link might travel somewhere you don't control, tick the box.
 
 ---
 
+## When it fails, the page says which half
+
+**Send tab → “Check this host from this device”** answers the question a failed transfer
+actually raises: is the host refusing this network, or did it answer without letting
+*this* page read the reply? It probes reachability with an opaque request, then runs a
+real 1 KiB upload through the same path your parts use — so the CORS rules, the form
+framing and the bucket credentials all get exercised — and on a bucket it deletes the
+test object afterwards. How to read the output is a table in
+[docs/SETUP-BUCKET.md](docs/SETUP-BUCKET.md); why a public host might refuse you
+specifically is in [docs/PROVIDERS.md](docs/PROVIDERS.md).
+
+**Step 3 asks who to send it to.** The address box sits in the card, not behind a
+disclosure: one button hands the finished draft to your mail app, and if the device has
+no mail app behind `mailto:` — a phone with no default client, a browser-only laptop —
+*Gmail draft* / *Outlook draft* open the same text in webmail, with *Copy the whole
+message* as the last resort. The address is filtered, so a pasted
+`a@b.com?to=someone@else` cannot add a recipient behind your back. Nothing is ever
+sent from this page: a draft opens, you press send.
+
+---
+
 ## Try it now
 
 ```bash
@@ -299,7 +320,7 @@ lib/crypto.js       PBKDF2 + AES-GCM in fixed records
 lib/pack.js         part plan, multipart bodies, retry, rate
 lib/backends.js     litterbox / bucket / bring-your-own-link / in-page test
 lib/receive.js      download, verify, stitch, write to disk
-lib/email.js        subject, body, mailto:
+lib/email.js        subject, body, mailto:, webmail drafts
 lib/ui.js           every DOM read and write
 lib/app.js          the two flows and the settings that drive them
 lib/config.js       optional pre-configuration for a shared deployment (bucket, part

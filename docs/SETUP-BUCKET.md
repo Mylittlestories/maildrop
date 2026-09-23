@@ -81,6 +81,31 @@ Two buttons sit under that form and they are worth pressing in order:
   rule, a wrong region, or a key without write access. Far better than guessing
   from a 403 mid-transfer.
 
+## When it fails, read the number
+
+Two buttons run the real upload path against 1 KiB of nothing, so you find out before a
+file is in flight: **Send tab → “Check this host from this device”** (whatever provider
+is selected) and **Settings → your own bucket → “…and really upload 1 byte”**.
+
+| What it says | What it means | What to do |
+|---|---|---|
+| `reachability ✗ nothing answered at all` | the address did not reply: DNS, offline, a captive portal, or the host refusing your IP range | another network — a phone hotspot is usually enough — or your own bucket |
+| `No HTTP status reached the page`, after reachability passed | the host answered but this page was not allowed to read it: CORS. A failed preflight looks exactly like a dead host | add the printed `page origin` to the bucket's allowed origins, verbatim, with `PUT`/`GET`/`HEAD`/`DELETE` and `expose ETag` |
+| `HTTP 403` | the request arrived and was refused | key id / secret, a key without write access, or the wrong region for that key |
+| `HTTP 404` | the request arrived; the path did not exist | bucket name, or path-style vs bucket-style endpoint |
+| `HTTP 500` / `503` | the host is failing or rate-limiting you | retry later. A free host is not yours to fix |
+
+The split that matters is the first two rows. A browser genuinely cannot tell "the host
+is down" from "the host refused this origin" — both arrive as a request with no answer —
+so the probe asks twice: once with `mode: 'no-cors'`, which proves something is
+listening even though the body cannot be read, and once with a real upload. First
+passes, second fails → CORS, yours to fix. First fails → no web page can reach that
+host from that network, and MailDrop is not special.
+
+The check deletes its test object on a bucket, because a self-test that leaves litter
+behind is a bad self-test. A free host has no delete API, so there the check tells you
+the 1 KiB file stays until that host's own expiry — that is all anybody can promise.
+
 ## Where the secret lives, and what that means
 
 The secret key is in the settings object this page keeps in `localStorage`, on the

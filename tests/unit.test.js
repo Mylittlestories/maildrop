@@ -382,5 +382,54 @@ function randFile(size, name) {
     eq(put2.url, put.url, 'the upload signature is stable, byte for byte');
   });
 
+  // ---- webmail compose links --------------------------------------------
+  await test('composeUrl builds an https draft link and encodes every part', () => {
+    const c = MD.email.composeUrl('gmail', 'first@example.com', 'Re: the mix', 'line one\nline two');
+    ok(c.url.startsWith('https://mail.google.com/mail/?view=cm'), 'gmail compose: ' + c.url.slice(0, 46));
+    ok(c.url.includes('&to=' + encodeURIComponent('first@example.com')), 'the address is encoded, not spliced raw');
+    ok(c.url.includes(encodeURIComponent('line one\nline two')), 'newlines survive as escapes');
+    eq(c.hasTo, true, 'a real address is accepted');
+    const o = MD.email.composeUrl('outlook', 'first@example.com', 's', 'b');
+    ok(o.url.startsWith('https://outlook.office.com/mail/deeplink/compose?to='), 'outlook gets its own shape');
+  });
+
+  await test('an address that could extend the query string is dropped, not escaped around', () => {
+    const evil = 'a@b.com?body=hacked&to=victim@x.com';
+    const c = MD.email.composeUrl('outlook', evil, 's', 'b');
+    eq(c.hasTo, false, 'nothing usable remains');
+    eq(c.dropped.join('|'), evil, 'and the caller is told what was refused');
+    ok(!c.url.includes('victim@x.com') && !c.url.includes(encodeURIComponent('victim@x.com')), 'the smuggled recipient never reaches the URL');
+    const mixed = MD.email.composeUrl('outlook', 'good@example.com, ' + evil, 's', 'b');
+    eq(mixed.hasTo, true, 'the valid address in the list still gets through');
+    ok(mixed.url.includes(encodeURIComponent('good@example.com')), 'and it is the only one');
+  });
+
+  await test('a deployment can point at its own webmail, but only over https', () => {
+    const before = MD.config;
+    MD.config = { composeUrl: 'https://webmail.example.com/write?to={to}&subject={subject}&body={body}' };
+    const c = MD.email.composeUrl('gmail', 'first@example.com', 'hi', 'there');
+    ok(c.url.startsWith('https://webmail.example.com/write?to='), 'the template wins over the built-in provider');
+    ok(c.url.includes('&subject=hi') && c.url.includes('&body=there'), 'all three placeholders filled');
+    MD.config = { composeUrl: 'http://insecure.example.com/write?to={to}' };
+    let threw = '';
+    try { MD.email.composeUrl('gmail', 'a@b.co', 's', 'b'); threw = 'did not throw'; } catch (e) { threw = e.message; }
+    ok(/has to be https:\/\//.test(threw), 'a plain-http compose URL is refused: ' + threw);
+    MD.config = before || {};
+  });
+
+  await test('explainFailure separates "no answer" from "the host said no", per status', () => {
+    const cfg = { bucket: 'clips', endpoint: 'https://s3.example.com' };
+    const zero = MD.backends.explainFailure(Object.assign(new Error('Nothing reached the page'), { httpStatus: 0 }), cfg, 'https://me.github.io');
+    const zt = zero.join(' ');
+    ok(zt.includes('https://me.github.io'), 'status 0 names the origin that must be allowed: ' + zt.slice(0, 90));
+    ok(/CORS rules/.test(zt) && /refusing this network/.test(zt), 'and it offers both fixes, saying which is yours');
+    const f403 = MD.backends.explainFailure(Object.assign(new Error('HTTP 403'), { httpStatus: 403 }), cfg, 'x').join(' ');
+    ok(/key id or secret/.test(f403), '403 is about credentials');
+    ok(!/CORS rules/.test(f403), 'and is not blamed on CORS');
+    const f404 = MD.backends.explainFailure(Object.assign(new Error('HTTP 404'), { httpStatus: 404 }), cfg, 'x').join(' ');
+    ok(/path is wrong/.test(f404), '404 points at the bucket name or URL style');
+    ok(/rate-limiting|failing/.test(MD.backends.explainFailure(Object.assign(new Error('HTTP 500'), { httpStatus: 500 }), cfg, 'x').join(' ')), 'a 5xx is blamed on the host, honestly');
+  });
+
   report('unit');
 })();

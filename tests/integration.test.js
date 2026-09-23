@@ -569,6 +569,41 @@ let mock;
     ok(secs > 0.9 && secs < 8, 'it gave up after ' + secs.toFixed(1) + 's, not before the window and not long after');
   });
 
+  // ---- the host check the Send tab offers ---------------------------------
+  await test('probeHost speaks to the real upload path and reports both halves', async () => {
+    const sb = freshSandbox();
+    const MDx = sb.MD;
+    MDx.app.state.cfg.backend = 'mockhost';
+    MDx.backends.get('mockhost').base = BASE;
+    const r = await MDx.backends.probeHost('mockhost', MDx.app.state.cfg.s3);
+    eq(r.ok, true, 'the mock host accepted the 1 KiB upload: ' + r.lines.join(' / ').slice(0, 200));
+    const txt = r.lines.join('\n');
+    ok(/reachability ✓/.test(txt), 'reachability reported');
+    ok(/upload ✓/.test(txt), 'upload reported');
+    ok(/page origin +\S+/.test(txt), 'it names the origin to whitelist: ' + r.lines[0]);
+    ok(/test file stays until/.test(txt), 'and is honest that a host with no delete API leaves it behind');
+  });
+
+  await test('probeHost on a dead port blames the network, not CORS', async () => {
+    const sb = freshSandbox();
+    sb.MD.backends.get('mockhost').base = 'http://127.0.0.1:1/';     // nothing listens there
+    const r = await sb.MD.backends.probeHost('mockhost', sb.MD.app.state.cfg.s3);
+    eq(r.ok, false, 'an unreachable host is never a pass');
+    const txt = r.lines.join('\n');
+    ok(/reachability ✗/.test(txt), txt.slice(0, 200));
+    ok(/not a CORS problem/.test(txt), 'and it is labelled as such: ' + txt.slice(-140));
+    ok(!/upload ✓/.test(txt), 'it stopped before sending anything');
+  });
+
+  await test('the no-network providers say there is nothing to check', async () => {
+    const sb = freshSandbox();
+    for (const key of ['local', 'direct']) {
+      const r = await sb.MD.backends.probeHost(key, {});
+      eq(r.ok, true, key + ' cannot fail a network check');
+      ok(/Nothing to check/.test(r.lines.join(' ')), key + ' says why');
+    }
+  });
+
   report('integration');
   mock && mock.kill();
   process.exit(process.exitCode || 0);

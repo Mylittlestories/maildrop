@@ -112,8 +112,8 @@ button.btn.big{display:block;width:100%;padding:14px 18px;font-size:16px;border-
 details.adv{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:#0a1120}
 details.adv>summary{cursor:pointer;padding:10px 13px;color:var(--dim);font-size:13px;font-weight:600;list-style:none}
 details.adv>summary::-webkit-details-marker{display:none}
-details.adv>summary::before{content:"\\25B8";display:inline-block;width:12px;color:var(--accent)}
-details.adv[open]>summary::before{content:"\\25BE"}
+details.adv>summary::before{content:"\25B8";display:inline-block;width:1em;margin-left:-1px;color:var(--accent)}
+details.adv[open]>summary::before{content:"\25BE"}
 details.adv>.advbody{padding:2px 13px 13px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .card>.card{margin-top:0}
@@ -179,6 +179,12 @@ details.adv>.advbody{padding:2px 13px 13px}
       </div>
       <div class="mini" id="backendBlurb" style="margin-top:8px"></div>
 
+      <div class="row" style="margin-top:10px">
+        <button class="btn small ghost" id="btnProbe">Check this host from this device</button>
+        <span class="hint" id="probeHint">sends a 1 KiB test file, nothing of yours</span>
+      </div>
+      <pre id="probeOut" class="box" hidden></pre>
+
       <details class="adv" id="advSend">
         <summary>Expiry, part size, password</summary>
         <div class="advbody">
@@ -228,18 +234,25 @@ details.adv>.advbody{padding:2px 13px 13px}
     </div>
     <div class="note" id="linkNote"></div>
 
+    <div class="row" style="margin-top:14px;align-items:flex-end">
+      <div class="grow"><label class="f" for="toInput">Send it to</label>
+        <input id="toInput" placeholder="name@example.com" autocomplete="off" inputmode="email" spellcheck="false"></div>
+      <button class="btn ok" id="btnMailto">Open in my mail app</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn small ghost" id="btnGmail">Gmail draft ↗</button>
+      <button class="btn small ghost" id="btnOutlook">Outlook draft ↗</button>
+      <span class="hint" id="mailHint">no mail app on this device? a draft opens in webmail instead — nothing is sent from this page</span>
+    </div>
+
     <details class="adv">
-      <summary>Email draft — the text behind “Copy the whole message”</summary>
+      <summary>Edit the subject and the message text</summary>
       <div class="advbody">
-        <div class="row">
-          <div class="grow"><label class="f" for="toInput">To</label><input id="toInput" placeholder="name@example.com" autocomplete="off"></div>
-          <div class="grow"><label class="f" for="subjInput">Subject</label><input id="subjInput" autocomplete="off"></div>
-        </div>
+        <div><label class="f" for="subjInput">Subject</label><input id="subjInput" autocomplete="off"></div>
         <textarea id="bodyText" style="min-height:190px;margin-top:10px"></textarea>
         <div class="row" style="margin-top:10px">
-          <button class="btn ok small" id="btnMailto">Open in my mail app</button>
           <button class="btn small ghost" id="btnCopyFile">Save the message to a .txt</button>
-          <span class="hint">the draft is written here only — nothing is sent from this page</span>
+          <span class="hint">the draft lives here only — nothing is sent from this page</span>
         </div>
       </div>
     </details>
