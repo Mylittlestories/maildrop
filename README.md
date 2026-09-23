@@ -274,6 +274,12 @@ between a mark and a smudge, which is not visible while editing an SVG at 512, s
 checks the favicon `sizes` attributes against the PNG headers, because a lying `sizes`
 is served happily and ignored silently.
 
+One more file rides on the same geometry: `assets/social-preview.png`, the 1280×640
+link card for the repository's GitHub settings, composed by `tools/make-preview.sh`.
+That script is the only thing in the toolchain that needs ImageMagick and a font, and
+it is optional and maintainer-only — the app, the suite and `npm run icons` install
+nothing, and the mark it lays type next to is the generated `assets/icon-512.png`.
+
 The icon is under the same MIT licence as the code. To make it yours: replace the
 files in `assets/` keeping the names, or change the constants and run `npm run icons`.
 
