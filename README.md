@@ -269,7 +269,10 @@ endpoint, because a missing CRLF before the closing boundary once produced
 
 ## The icon
 
-<img src="assets/icon-512.png" width="92" height="92" alt="MailDrop: a white arrow dropping into an open tray, on a sky-blue rounded square">
+![The MailDrop mark: a white arrow dropping into an open tray, on a sky-blue rounded square](assets/icon-192.png)
+
+*(a markdown image rather than an `<img>` tag: GitHub's mobile app does not render raw
+HTML, and this README is the only place the mark appears on the repository page.)*
 
 One mark: a white arrow dropping into an open tray on a sky-blue field. That is the
 WeTransfer move — a flat colour, one shape, nothing that needs reading — drawn from
@@ -300,6 +303,25 @@ link card for the repository's GitHub settings, composed by `tools/make-preview.
 That script is the only thing in the toolchain that needs ImageMagick and a font, and
 it is optional and maintainer-only — the app, the suite and `npm run icons` install
 nothing, and the mark it lays type next to is the generated `assets/icon-512.png`.
+
+### Where a repository can have an icon at all
+
+Three places, and the list is short because GitHub has no repository icon slot:
+
+* **The README** — the image above. This is what people see on the repository page.
+* **The link card** — the picture shown when the URL is pasted into a chat or a post.
+  GitHub reads that from *Settings → General → Social preview*, and it is a form in
+  the browser and nowhere else: the REST API has no endpoint for it (`POST
+  /repos/<owner>/<repo>/social_preview` answers 404 even with a `repo`-scoped classic
+  token), so it is one manual drag of `assets/social-preview.png`, and no CI job can
+  do it for you.
+* **The Pages site** — tab icon, header, home-screen tile, Android launcher. Those are
+  wired up here, and they are the reason `npm run icons` exists.
+
+There is deliberately **no** mark in the repository list or beside the repository tabs:
+GitHub renders a favicon for Pages sites, not for repositories, so a claim that a file
+in the repo puts an icon on the browser tab at `github.com/<owner>/<repo>` describes
+something that does not exist.
 
 The icon is under the same MIT licence as the code. To make it yours: replace the
 files in `assets/` keeping the names, or change the constants and run `npm run icons`.
