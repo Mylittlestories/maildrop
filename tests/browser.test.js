@@ -46,7 +46,7 @@ const PREAMBLE = [
 function buildHtml() {
   let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const scripts = [...html.matchAll(/<script src="(lib\/[^"]+)"><\/script>/g)].map((m) => m[1]);
-  if (scripts.length !== 10) throw new Error('expected ten scripts, found ' + scripts.length);
+  if (scripts.length !== 11) throw new Error('expected eleven scripts, found ' + scripts.length);
   const inlined = scripts.map((f) => '<script>' + fs.readFileSync(path.join(ROOT, f), 'utf8') + '<\/script>').join('\n');
   html = html.replace(/<script src="lib\/[^"]+"><\/script>/g, '');
   const head = '<script>' + PREAMBLE + '<\/script>';
@@ -90,7 +90,7 @@ let mock;
     ok(w.MD && w.MD.app && w.MD.backends, 'MD namespace built');
     ok(w.document.getElementById('drop'), 'the drop zone exists');
     ok(w.UI && typeof w.UI.init === 'function', 'UI present');
-    eq(doc.querySelectorAll('#backendSel option').length, 5, 'provider dropdown lists every backend (mock host included because we are on 127.0.0.1)');
+    eq(doc.querySelectorAll('#backendSel option').length, 5, 'provider dropdown lists every backend (mock host included because we are on 127.0.0.1)'); // 5 providers
     eq(doc.getElementById('panel-send').className, 'on', 'send tab is the default');
     eq(doc.getElementById('btnStart').disabled, true, 'Start is disabled with no file chosen');
     ok(doc.getElementById('context').textContent.includes('secure context'), 'context badges rendered: ' + doc.getElementById('context').textContent.slice(0, 40));

@@ -249,6 +249,17 @@ details.adv>.advbody{padding:2px 13px 13px}
       <button class="btn small ghost" id="btnOutlook">Outlook draft ↗</button>
       <span class="hint" id="mailHint">no mail app on this device? a draft opens in webmail instead — nothing is sent from this page</span>
     </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn small ghost" id="btnWhatsApp">WhatsApp ↗</button>
+      <button class="btn small ghost" id="btnTelegram">Telegram ↗</button>
+      <button class="btn small ghost" id="btnQrShow">QR code</button>
+      <span class="hint">share the link where you already chat — no email needed</span>
+    </div>
+    <div id="qrBox" hidden style="margin-top:12px;text-align:center">
+      <div id="qrCanvas" style="display:inline-block;padding:12px;background:#fff;border-radius:12px"></div>
+      <div class="mini" style="margin-top:6px">Scan with any camera. Long-press the QR on your phone to share the image.</div>
+      <div class="row" style="justify-content:center;margin-top:8px"><button class="btn small ghost" id="btnQrHide">Hide QR</button></div>
+    </div>
 
     <details class="adv">
       <summary>Edit the subject and the message text</summary>
@@ -354,6 +365,14 @@ details.adv>.advbody{padding:2px 13px 13px}
             <div class="mini" style="margin-top:10px">The secret key never leaves this browser: it signs requests from here straight to your bucket. <a href="docs/SETUP-BUCKET.md">Five-minute setup</a>.</div>
       </div>
     </details>
+    <details class="adv" id="corsHelp" style="margin-top:12px">
+      <summary>Copy the CORS settings your bucket needs (one paste)</summary>
+      <div class="advbody">
+        <div class="mini">Paste this into your bucket's CORS configuration — Backblaze B2: <em>Buckets → CORS</em>, Cloudflare R2: <em>Settings → CORS</em>. Replace the origin if you host MailDrop elsewhere. It allows this page to <code>PUT</code>, <code>GET</code>, <code>HEAD</code>, <code>DELETE</code> and to read <code>ETag</code>.</div>
+        <textarea id="corsJson" readonly style="min-height:160px;font-size:12px"></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn small ghost" id="btnCopyCors">Copy CORS JSON</button><span class="hint" id="corsHint"></span></div>
+      </div>
+    </details>
 
     <h3>Starting over</h3>
     <div class="row">
@@ -380,6 +399,7 @@ details.adv>.advbody{padding:2px 13px 13px}
 <script src="lib/backends.js"></script>
 <script src="lib/receive.js"></script>
 <script src="lib/email.js"></script>
+<script src="lib/qrcode.js"></script>
 <script src="lib/ui.js"></script>
 <script src="lib/app.js"></script>
 </body>

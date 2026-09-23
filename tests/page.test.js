@@ -58,7 +58,7 @@ function idRefs(file) {
 
   await test('the page loads all ten lib files in dependency order', () => {
     const order = [...html.matchAll(/<script src="lib\/([^"]+)"><\/script>/g)].map((m) => m[1]);
-    const want = ['util.js', 'config.js', 'manifest.js', 'crypto.js', 'pack.js', 'backends.js', 'receive.js', 'email.js', 'ui.js', 'app.js'];
+    const want = ['util.js', 'config.js', 'manifest.js', 'crypto.js', 'pack.js', 'backends.js', 'receive.js', 'email.js', 'qrcode.js', 'ui.js', 'app.js'];
     eq(order.join(','), want.join(','), 'script order');
     const onDisk = fs.readdirSync(LIB).filter((f) => f.endsWith('.js')).sort();
     eq(onDisk.sort().join(','), want.slice().sort().join(','), 'lib/*.js on disk must match the page: ' + onDisk.join(','));
@@ -67,16 +67,16 @@ function idRefs(file) {
   await test('no external scripts, styles or fonts — the app must run offline', () => {
     const bad = [...html.matchAll(/(?:src|href)="(https?:\/\/[^"]+)"/g)].map((m) => m[1]).filter((u) => !/docs\/|README/.test(u));
     eq(bad.join(' '), '', 'external references found: ' + bad.join(' '));
-    const code = ['util.js', 'config.js', 'manifest.js', 'crypto.js', 'pack.js', 'backends.js', 'receive.js', 'email.js', 'ui.js', 'app.js']
+    const code = ['util.js', 'config.js', 'manifest.js', 'crypto.js', 'pack.js', 'backends.js', 'receive.js', 'email.js', 'qrcode.js', 'ui.js', 'app.js']
       .map((f) => fs.readFileSync(path.join(LIB, f), 'utf8')).join('\n');
     eq(/<(script|link)\b|document\.write|importScripts|new Worker|createElement\("script"\)/i.test(code), false, 'no dynamic script loading');
     ok(code.includes('litterbox.catbox.moe'), 'the only remote hosts are the storage endpoints you choose');
     eq((code.match(/https?:\/\/(?!127\.0\.0\.1|localhost|s3\.|files\.catbox|litter\.catbox|litterbox|tmpfiles)[a-z0-9.-]+\//gi) || [])
-            .filter((u) => !/schema|w3\.org|example|amazonaws|backblazeb2|cloudflare|wasabi|catbox|tmpfiles|mail\.google\.com|outlook\.office\.com/.test(u)).join(' '), '', 'stray third-party URLs');
+            .filter((u) => !/schema|w3\.org|example|amazonaws|backblazeb2|cloudflare|wasabi|catbox|tmpfiles|mail\.google\.com|outlook\.office\.com|d-project\.com|denso-wave\.com|opensource\.org|github\.com|code\.google\.com|jindo\.dev\.naver\.com|naver\.com|wa\.me|t\.me/.test(u)).join(' '), '', 'stray third-party URLs');
   });
 
   await test('nothing in the shipped page leaks a secret to the host', () => {
-    const code = ['app.js', 'ui.js', 'backends.js', 'email.js'].map((f) => fs.readFileSync(path.join(LIB, f), 'utf8')).join('\n');
+    const code = ['app.js', 'ui.js', 'backends.js', 'email.js', 'qrcode.js'].map((f) => fs.readFileSync(path.join(LIB, f), 'utf8')).join('\n');
     // the password must never be sent anywhere, and the hash must not be
     // included in the mail body's visible text beyond the file name
     eq(/body\s*[:=][^;\n]*password/i.test(code), false, 'no password in the outgoing email body');
@@ -106,7 +106,7 @@ function idRefs(file) {
       ok(/^text\/html/.test(page.headers.get('content-type') || ''), 'served as HTML');
       const body = await page.text();
       const scripts = [...body.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
-      eq(scripts.length, 10, 'ten local scripts referenced');
+      eq(scripts.length, 11, 'eleven local scripts referenced');
       for (const src of scripts) {
         const r = await fetch(srv.base + src);
         eq(r.status, 200, src + ' resolves relative to the page');
@@ -152,10 +152,10 @@ function idRefs(file) {
     // lib/email.js names two third-party hosts so a device with no mail app behind
     // mailto: can still send. That is only acceptable while nothing is *loaded* from
     // them, so the exception is fenced in instead of merely listed in the allowlist.
-    const hosts = /mail\.google\.com|outlook\.office\.com/;
+    const hosts = /mail\.google\.com|outlook\.office\.com|wa\.me|t\.me/;
     eq(hosts.test(html), false, 'index.html must not mention a compose host — a link, img or script there is fetched on every page view');
     const offenders = [];
-    for (const f of ['util.js', 'config.js', 'manifest.js', 'crypto.js', 'pack.js', 'backends.js', 'receive.js', 'email.js', 'ui.js', 'app.js']) {
+    for (const f of ['util.js', 'config.js', 'manifest.js', 'crypto.js', 'pack.js', 'backends.js', 'receive.js', 'email.js', 'qrcode.js', 'ui.js', 'app.js']) {
       fs.readFileSync(path.join(LIB, f), 'utf8').split('\n').forEach((line, i) => {
         if (hosts.test(line) && /fetch\(|XMLHttpRequest|new Image|createElement\(|@import|url\(|importScripts/.test(line)) {
           offenders.push(f + ':' + (i + 1) + ' ' + line.trim().slice(0, 70));
@@ -165,6 +165,8 @@ function idRefs(file) {
     eq(offenders.join(' | '), '', 'a compose host must never sit next to a request primitive');
     const em = fs.readFileSync(path.join(LIB, 'email.js'), 'utf8');
     ok(/The compose URL has to be https/.test(em), 'composeUrl refuses a non-https compose template');
+    const uiCode = fs.readFileSync(path.join(LIB, 'ui.js'), 'utf8');
+    ok(/wa\.me|t\.me/.test(uiCode), 'share buttons use wa.me/t.me navigate, not fetch');
     ok(fs.readFileSync(path.join(LIB, 'ui.js'), 'utf8').includes("global.open(c.url, '_blank', 'noopener')"),
       'ui only ever opens it, in a new tab, with noopener');
   });

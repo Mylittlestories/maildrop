@@ -51,10 +51,10 @@ const say = (...a) => console.log(...a);
   const inline = [...html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/g)]
     .filter((m) => m[1].trim().length);
   const csp = /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(html);
-  if (srcs.length !== 10) throw new Error('expected ten scripts on the live page, found ' + srcs.length);
+  if (srcs.length !== 11) throw new Error('expected eleven scripts on the live page, found ' + srcs.length);
   if (inline.length) throw new Error('the live page carries executable inline script, which its own CSP forbids');
   if (!csp || !/script-src 'self'/.test(csp[1])) throw new Error("no script-src 'self' policy on the live page");
-  say('markup: ten scripts, no inline script, CSP present ✓');
+  say('markup: eleven scripts, no inline script, CSP present ✓');
 
   // Every file the page names must be there, be a script, and be the bytes we
   // shipped. Byte identity is the point: a stale deploy is the failure mode a

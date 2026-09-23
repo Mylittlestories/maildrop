@@ -248,7 +248,7 @@ Node 20.19 or newer, and that floor is jsdom's, not the app's: nothing in `lib/`
   `tools/live-check.mjs` run against that same host as one of its tests: the tool that
   answers "is the provider working" is itself checked, offline, because the broken version of that
   tool is what let a broken upload be blamed on the host.
-* `tests/browser.test.js` — the actual page, all ten scripts, in jsdom, clicked
+* `tests/browser.test.js` — the actual page, all eleven scripts, in jsdom, clicked
   like a user: pick → send → link → receive → byte-identical file, plus the
   password, split, corrupted-part and bring-your-own-link paths.
 * `tests/page.test.js` — the HTML itself: ids the scripts rely on, no stray
