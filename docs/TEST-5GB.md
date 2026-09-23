@@ -43,7 +43,7 @@ The peak of 1 044 MB is the *harness*, not the page: `tests/xhr-shim.js` materia
 part with `arrayBuffer()` because jsdom's XHR cannot stream a Blob body. The browser hands
 the Blob to `xhr.send()` and reads the download in 16 MiB windows.
 
-## Why nothing arrived in georgederve@gmail.com
+## Why nothing arrived in anybody's inbox
 
 This sandbox has no mail transport — `command -v sendmail mail msmtp ssmtp mutt` returns
 nothing, there are no credentials, and the app is designed not to have any: it composes the
@@ -63,7 +63,7 @@ cd maildrop && npm run serve      # http://localhost:8080  (or use your GitHub P
 
 Open the page → **1** choose the file → **2** pick *Litterbox (72 h)* and leave the part size
 on auto → **3** Start transfer → the link card has a **Copy message** button. Paste it to
-`georgederve@gmail.com`. The file itself never touches your mail; the message is about
+the address you are testing with. The file itself never touches your mail; the message is about
 1 100 characters.
 
 To repeat this exact test on your own machine, where both ends are fast and nothing is
@@ -75,7 +75,7 @@ npm run stress -- --gb 5 --part 96 --keep
 
 ## The message
 
-> **To:** georgederve@gmail.com
+> **To:** someone@example.com
 > **Subject:** field-recording.mkv — 5 GB, link good for 3 days
 >
 > Download: https://litter.catbox.moe/«your-id»

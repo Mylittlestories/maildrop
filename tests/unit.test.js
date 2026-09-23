@@ -125,8 +125,8 @@ function randFile(size, name) {
   });
 
   await test('the To: field cannot add recipients or headers', () => {
-    const good = MD.email.safeAddress('georgederve@gmail.com, second@x.co.uk');
-    eq(good.to, 'georgederve@gmail.com,second@x.co.uk');
+    const good = MD.email.safeAddress('first@example.com, second@x.co.uk');
+    eq(good.to, 'first@example.com,second@x.co.uk');
     eq(good.dropped.length, 0);
     const evil = MD.email.safeAddress('a@b.co?cc=victim@evil.com');
     eq(evil.to, '', 'a query in the address is not an address');

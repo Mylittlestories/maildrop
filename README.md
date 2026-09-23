@@ -9,6 +9,11 @@ Open `index.html`, drop the file, copy the link, mail it. The recipient opens
 the link, the page rebuilds the file in their browser, saves it, and tells them
 whether the bytes match what you sent.
 
+**Live:** <https://mylittlestories.github.io/maildrop/> — this repository served by
+GitHub Pages, nothing else running. Report a vulnerability via
+[SECURITY.md](SECURITY.md); the design's threat model is in
+[docs/SECURITY.md](docs/SECURITY.md).
+
 ### Reading the page
 
 The Send tab is three numbered steps and that is all you see:

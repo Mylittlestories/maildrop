@@ -164,13 +164,13 @@ let mock;
     const sb = freshSandbox();
     const cfg = {
       endpoint: 'https://s3.eu-central-003.backblazeb2.com', bucket: 'maildrop-demo', region: 'eu-central-003',
-      keyId: '004b9c7f2f1a000', secret: 'Kx6TESTkeySECRETtestKEYsecret00000', keyPrefix: 'maildrop/', signedUrlExpiry: 3600
+      keyId: 'KeyIdNotReal', secret: 'SecretNotReal', keyPrefix: 'maildrop/', signedUrlExpiry: 3600
     };
     const key = sb.MD.backends.s3.objectKey(cfg, 'holiday clip.mov');
     ok(/^maildrop\/\d{12}-[0-9a-f]{12}\/holiday clip\.mov$/.test(key), 'key layout: ' + key);
     const signed = await sb.MD.backends.s3.presignPutUrl(cfg, key, 123, { amzDate: '20260922T120000Z' });
     ok(/[?&]X-Amz-Signature=[0-9a-f]{64}$/.test(signed.url), 'signature appended');
-    ok(signed.url.includes('X-Amz-Credential=004b9c7f2f1a000%2F20260922%2Feu-central-003%2Fs3%2Faws4_request'), 'credential scope encoded');
+    ok(signed.url.includes('X-Amz-Credential=KeyIdNotReal%2F20260922%2Feu-central-003%2Fs3%2Faws4_request'), 'credential scope encoded');
     ok(signed.url.includes('X-Amz-SignedHeaders=host'), 'only host signed (no preflight headers)');
     ok(signed.stringToSign.startsWith('AWS4-HMAC-SHA256\n20260922T120000Z\n20260922/eu-central-003/s3/aws4_request\n'), 'string-to-sign shape:\n' + signed.stringToSign);
     const again = await sb.MD.backends.s3.presignPutUrl(cfg, key, 123, { amzDate: '20260922T120000Z' });
