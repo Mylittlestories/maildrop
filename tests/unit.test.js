@@ -183,6 +183,21 @@ function randFile(size, name) {
     eq(found.n, 'x.bin');
     eq(found.parts[0].i, 'q1w2.bin');
   });
+
+  await test('a clipped local test token is repaired, but a clipped host token is not', () => {
+    const fields = { v: 1, n: 'preview.zip', z: 10, p: 'local', p2: [
+      { x: 0, i: 'part-a1b2', s: 5, h: 'aaaa', b: 0 },
+      { x: 1, i: 'part-c3d4', s: 5, h: 'bbbb', b: 0 }
+    ] };
+    const clipped = MD.util.bytesToBase32(MD.util.utf8Encode(JSON.stringify(fields).slice(0, -1) + ','));
+    const found = MD.manifest.findManifest(clipped);
+    eq(found.p, 'local');
+    eq(found.b, 'local://{id}');
+    eq(found.parts.length, 2);
+    const host = Object.assign({}, fields, { p: 'litterbox', b: 'https://host.example/{id}' });
+    const clippedHost = MD.util.bytesToBase32(MD.util.utf8Encode(JSON.stringify(host).slice(0, -1) + ','));
+    throwsAsync(() => Promise.resolve().then(() => MD.manifest.findManifest(clippedHost)), /incomplete download token/);
+  });
   await test('two links from separate emails merge into one complete job', () => {
     const base = { v: 1, n: 'parted.bin', t: '', z: 30, p: 'litterbox', b: 'https://litter.catbox.moe/{id}', d: 0, o: '', e: null, h: 'abc', parts: [{ i: '', s: 10, h: '' }, { i: '', s: 20, h: '' }] };
     const a = JSON.parse(JSON.stringify(base)); a.parts[0].i = 'aaa.bin';
