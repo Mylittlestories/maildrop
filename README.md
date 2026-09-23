@@ -59,7 +59,7 @@ your browser ──split──▶ parts ──▶ a file host (litterbox.catbox.
 | Files up to ~1 GB | one part, one link, done |
 | 1 GB – 20 GB | split into provider-sized parts, **one** link that stitches them back |
 | over 20 GB | allowed, but only with your own bucket (see below) |
-| many files at once | refused on purpose — zip them, the manifest stays tiny |
+| many files at once | bundled as one stored zip in this browser — same link, same verify |
 | optional password | off by default; when set, the host only ever sees ciphertext |
 
 The Send tab is three numbered steps and nothing else until you need them: **1**
@@ -201,9 +201,10 @@ test object afterwards. How to read the output is a table in
 [docs/SETUP-BUCKET.md](docs/SETUP-BUCKET.md); why a public host might refuse you
 specifically is in [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
-**Step 3 asks who to send it to.** The address box sits in the card, not behind a
-disclosure: one button hands the finished draft to your mail app, and if the device has
-no mail app behind `mailto:` — a phone with no default client, a browser-only laptop —
+**Step 3 asks who to send it to.** The address box is in step 3 — before you press
+Send — and again in the finished card, so you can type it once on this device and it
+is remembered; one button hands the draft to your mail app, and if the device has no
+mail app behind `mailto:` — a phone with no default client, a browser-only laptop —
 *Gmail draft* / *Outlook draft* open the same text in webmail, with *Copy the whole
 message* as the last resort. The address is filtered, so a pasted
 `a@b.com?to=someone@else` cannot add a recipient behind your back. Nothing is ever

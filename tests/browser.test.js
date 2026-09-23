@@ -251,15 +251,31 @@ let mock;
     ok(/over|budget|past/.test(doc.getElementById('planBox').textContent), 'the plan box warns before Start: ' + doc.getElementById('planBox').textContent.slice(0, 200));
   });
 
-  await test('multi-file selection is refused with instructions, not a crash', async () => {
+  await test('several files travel as one stored zip rather than one file per transfer', async () => {
     const { dom, w, doc } = await bootPage();
     w.MD.app.state.files = [
       new File([crypto.randomBytes(10)], 'a.bin'),
       new File([crypto.randomBytes(10)], 'b.bin')
     ];
+    w.MD.app.state.cfg.backend = 'mockhost';
+    w.MD.app.state.cfg.receiveBase = BASE + 'index.html';
+    w.MD.backends.mock.base = BASE;
     w.UI.renderFiles();
-    eq(doc.getElementById('btnStart').disabled, true, 'Start stays disabled');
-    ok(doc.getElementById('planBox').textContent.includes('Zip'), 'told the user to zip: ' + doc.getElementById('planBox').textContent.slice(0, 80));
+    eq(doc.getElementById('btnStart').disabled, false, 'Start stays enabled for several files');
+    const plan = doc.getElementById('planBox').textContent;
+    ok(/2 files.*\.zip/i.test(plan) || /a\.zip/i.test(plan), 'plan names the archive: ' + plan.slice(0, 120));
+    ok(/stored, not compressed/i.test(doc.getElementById('fileList').textContent) || /stored, not compressed/i.test(plan), 'and says how it is stored');
+    // actually send the two files and prove the recipient gets a zip
+    doc.getElementById('btnStart').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await waitUntil(() => !doc.getElementById('linkCard').hidden, 20000, 'link card for multi-file');
+    const m = w.MD.app.state.lastManifest;
+    ok(m.n.endsWith('.zip'), 'manifest names the archive: ' + m.n);
+    ok(m.z > 20, 'archive size counts the zip framing, not just the bodies');
+    const w2 = await bootPage();
+    w2.w.MD.backends.mock.base = BASE;
+    await w2.w.MD.app.runReceive(m);
+    const out = Buffer.from(await w2.w.MD.app.state.receive.resultBlob.arrayBuffer());
+    ok(out.slice(0, 4).toString() === 'PK\x03\x04', 'what the recipient downloads is a zip');
   });
 
   await test('full click-through: pick → Start → link + email text appear', async () => {

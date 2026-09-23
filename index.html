@@ -155,9 +155,9 @@ details.adv>.advbody{padding:2px 13px 13px}
 
     <div class="drop" id="drop">
       <img class="mark" src="assets/icon.svg" alt="" width="38" height="38">
-      <b>Drop one file here, or click to browse</b>
-      <p>zip a folder first if you want to send several files as one</p>
-      <input type="file" id="fileInput" hidden>
+      <b>Drop files here, or click to browse</b>
+      <p>one file or many — several travel as one stored zip</p>
+      <input type="file" id="fileInput" hidden multiple>
     </div>
     <div id="directBox" hidden>
       <label class="f" for="directUrl">The download URL you already have</label>
@@ -204,6 +204,11 @@ details.adv>.advbody{padding:2px 13px 13px}
     <hr>
     <div class="step"><span class="no">3</span><div class="grow">
       <h2>Make the link</h2>
+      <div class="row" style="margin-top:10px;align-items:flex-end">
+        <div class="grow"><label class="f" for="toInputPre">Send it to — optional, fills the draft</label>
+          <input id="toInputPre" placeholder="name@example.com — left empty, the draft is still made" autocomplete="off" inputmode="email" spellcheck="false"></div>
+      </div>
+      <div class="mini" id="toPreHint" style="margin-top:6px">You can fill this before or after sending — it is remembered on this device and never sent anywhere.</div>
     </div></div>
     <button class="btn big" id="btnStart" disabled>Choose a file first</button>
     <div class="row" style="margin-top:9px">
