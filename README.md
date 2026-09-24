@@ -4,12 +4,12 @@
 
 <h1 align="center">MailDrop</h1>
 
-<p align="center"><strong>v1.3.2</strong> · big files by email link</p>
+<p align="center"><strong>v1.3.3</strong> · big files by email link</p>
 
 <p align="center">
   <a href="https://mylittlestories.github.io/maildrop/">Open the live app</a>
   ·
-  <a href="https://github.com/Mylittlestories/maildrop/releases/tag/v1.3.2">Latest release</a>
+  <a href="https://github.com/Mylittlestories/maildrop/releases/tag/v1.3.3">Latest release</a>
 </p>
 
 [![tests](https://github.com/Mylittlestories/maildrop/actions/workflows/ci.yml/badge.svg)](https://github.com/Mylittlestories/maildrop/actions/workflows/ci.yml)
