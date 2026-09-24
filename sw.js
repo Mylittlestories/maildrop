@@ -3,7 +3,7 @@
    “Install app” and airplane mode both work. Nothing about your file
    ever touches this cache — only the UI shell.
    Bump the CACHE name when you ship new bytes. */
-const CACHE = 'maildrop-v1.3.3';
+const CACHE = 'maildrop-v1.3.4';
 const SHELL = [
   './',
   './index.html',
