@@ -284,7 +284,7 @@ details.adv>.advbody{padding:2px 13px 13px}
 
   <div class="card" id="p2pCard" hidden style="margin-top:14px">
     <div class="row"><h2 style="margin:0">Direct — no host, both online</h2><span class="pill warn" id="p2pPill">WebRTC</span></div>
-    <div class="note">Nothing is uploaded. The file goes straight from this browser to theirs while both tabs stay open. Use it when the public host is blocked or you don't want a link that outlives the transfer.</div>
+    <div class="note">Nothing is uploaded. The file goes straight from this browser to theirs while both tabs stay open. It works best when both devices share a Wi‑Fi network; different mobile/carrier networks may block a direct route because this static app has no TURN relay. If it fails, use the host upload or your own bucket.</div>
     <div id="p2pNoSupport" hidden class="note bad" style="margin-top:10px">This browser cannot do direct transfers (no WebRTC). Use the host upload above — it works everywhere.</div>
     <div id="p2pSteps">
       <div class="row" style="margin-top:10px"><button class="btn ok" id="btnP2pCreate">Create a code for these files</button><span class="hint" id="p2pHint">share the next box via WhatsApp/Telegram/QR</span></div>
@@ -330,7 +330,7 @@ details.adv>.advbody{padding:2px 13px 13px}
     <details class="adv" id="p2pRecvWrap" style="margin-top:12px">
       <summary>Someone sent me a direct code (no link) — join them</summary>
       <div class="advbody">
-        <div class="note">Both of you keep this page open until the bar fills. No host, no link that survives.</div>
+        <div class="note">Both of you keep this page open until the bar fills. No host, no link that survives. Same Wi‑Fi is the most reliable setup; some carrier-to-carrier connections need a TURN relay, which this no-server app does not provide.</div>
         <div id="p2pRecvNoSupport" hidden class="note bad">This browser cannot do direct transfers.</div>
         <label class="f" for="p2pRecvOffer">Paste their code</label><textarea id="p2pRecvOffer" placeholder="Paste the code they sent via chat/QR"></textarea>
         <div class="row" style="margin-top:8px"><button class="btn" id="btnP2pRecvCreate">Create my answer</button><span class="hint" id="p2pRecvHint"></span></div>

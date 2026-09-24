@@ -114,6 +114,7 @@ Chosen in the dropdown, described in the panel, tested for real in
 |---|---|---|---|
 | **Litterbox** (default) | 950 MiB | 1 h / 12 h / 24 h / 72 h | no signup, browser-friendly CORS, range requests. A public host: treat the link as the secret. |
 | **Your own bucket** | 4 GiB | you decide | Backblaze B2 or Cloudflare R2 free tier is enough for most people (10 GB). The browser signs requests itself and PUTs straight to the bucket. Needed for >20 GB, long retention, or keeping the file out of a stranger's hands. [Setup →](docs/SETUP-BUCKET.md) |
+| **Direct P2P** | n/a | while both tabs stay open | WebRTC sends browser-to-browser with no host. Best on the same Wi‑Fi; some carrier-to-carrier NATs need a TURN relay, which this static app does not run. |
 | **A link I already have** | n/a | whatever that host does | No upload. Paste a URL from any host (or a network share) and MailDrop writes the email and the receive page for it. |
 | **In-page test** | 512 MiB | until you close the tab | No network at all. Good for watching the pipeline work before trusting a host. |
 
